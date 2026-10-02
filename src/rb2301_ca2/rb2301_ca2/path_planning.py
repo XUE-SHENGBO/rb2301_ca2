@@ -19,7 +19,7 @@ from nav_msgs.msg import Odometry
 from PIL import Image
 from geometry_msgs.msg import Twist
 
-
+ 
 np.set_printoptions(
     2, suppress=True, threshold=np.inf
 )  # Print numpy arrays to specified d.p., suppress scientific notation (e.g. 1e-5), and do not truncate
@@ -340,7 +340,51 @@ class Grid():
             print("\033c", end="")  # Clear terminal between frames
             print('\n'.join(''.join(row) for row in display))
             time.sleep(delay)
+class cell:
+    f = inf
+    g = inf
+    h = None
+    status = None
+    position = (0,0)
+    parent = None
+def astar(start:cell, end:cell, grid_convert=None):
 
+    frontier=[start]
+    while(frontier):
+        this_cell = min(frontier, key=lambda cell: cell.f)
+        frontier.remove(this_cell)
+        visited.add(this_cell)
+
+        if this_cell.position == end.position:
+            path = []
+            node = this_cell
+            while node is not None:
+                path.append(node.position)
+                node = node.parent
+            return path[::-1]
+        
+        for i in range(-1,2):
+            for j in range(-1,2):
+                if not (i == 0 and j == 0) and 0<=this_cell.position[0]+i<len(grid_convert) and 0<=this_cell.position[1]+j<len(grid_convert):
+                    this_child_cell = grid_convert[this_cell.position[0]+i][this_cell.position[1]+j]
+                    if this_child_cell.status == True:
+                        if i == 0 or j == 0:
+                            plan_g = this_cell.g + 1.0
+                        else:
+                            plan_g = this_cell.g + 1.414  
+
+                        if plan_g < this_child_cell.g:
+                            this_child_cell.g = plan_g
+                            this_child_cell.f = plan_g + this_child_cell.h
+                            this_child_cell.parent = this_cell
+
+                            if this_child_cell not in frontier:
+                                frontier.append(this_child_cell)
+    return None
+
+
+                        
+                            
 
 def main(args=None):
     global max_translate_velocity
