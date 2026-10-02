@@ -195,7 +195,7 @@ class WaypointNode(Node):
                 dx = abs(node.position[0] - goal_position[0])
                 dy = abs(node.position[1] - goal_position[1])
                 node.h = 1.0 * (dx + dy) + (1.414 - 2 * 1.0) * min(dx, dy)
-                node.F = np.inf
+                node.f = np.inf
                 node.g = np.inf
                 node.parent = None
 
@@ -230,7 +230,7 @@ class WaypointNode(Node):
 
 class Cell():
     def __init__(self,h,position,status):
-        self.F = np.inf
+        self.f = np.inf
         self.g = np.inf
         self.h = h
         self.status = status
@@ -399,11 +399,11 @@ class Grid():
 def astar(start:Cell, end:Cell, grid_convert=None):
 
     start.g = 0.0
-    start.F = start.h
+    start.f = start.h
     visited = set()
     frontier=[start]
     while(frontier):
-        this_cell = min(frontier, key=lambda cell: cell.F)
+        this_cell = min(frontier, key=lambda cell: cell.f)
         frontier.remove(this_cell)
         visited.add(this_cell)
 
@@ -427,7 +427,7 @@ def astar(start:Cell, end:Cell, grid_convert=None):
 
                         if plan_g < this_child_cell.g:
                             this_child_cell.g = plan_g
-                            this_child_cell.F = plan_g + this_child_cell.h
+                            this_child_cell.f = plan_g + this_child_cell.h
                             this_child_cell.parent = this_cell
 
                             if this_child_cell not in frontier:
