@@ -19,12 +19,12 @@ from nav_msgs.msg import Odometry
 from PIL import Image
 from geometry_msgs.msg import Twist
 
- 
+
 np.set_printoptions(
     2, suppress=True, threshold=np.inf
 )  # Print numpy arrays to specified d.p., suppress scientific notation (e.g. 1e-5), and do not truncate
 
-set_logger_level("waypoint", level=LoggingSeverity.DEBUG) # Configure to either LoggingSeverity.INFO or LoggingSeverity.DEBUG
+set_logger_level("waypoint", level=LoggingSeverity.INFO) # Configure to either LoggingSeverity.INFO or LoggingSeverity.DEBUG
 
 occupancy_grid_resolution = 0.2 # Sim (and grid array) resolution, in metres per cell
 irl_resolution = occupancy_grid_resolution / 2 # The real maze is built at half the scale of the Gazebo maze -- same layout, 0.1m cells instead of 0.2m
@@ -120,6 +120,9 @@ class WaypointNode(Node):
         self.path = [] # Set this to your planned route (a list of grid-index tuples, in travel order) once you've computed it -- it'll automatically show up in the terminal map print
         self._last_printed_path = None
 
+        self.grid_convert = self.convert_maparray(self.map_array)
+        self.print_convert_map(self.grid_convert)   #test convert_maparray
+
     def print_map(self):
         '''Prints the occupancy grid to the terminal: walls, your current position ('S'), all goal points ('W'/'G'),
         and your planned route (self.path) if you've set one ('*'). Safe to call anytime pose is known; does nothing
@@ -132,6 +135,7 @@ class WaypointNode(Node):
         goal_cells = [clip(world_to_grid(gx, gy, self.origin, self.resolution)) for gx, gy in self.goal_list]
         grid = Grid(self.map_array, starting_position=current_cell, goal_position=goal_cells[-1])
         grid.print_grid_map(waypoints=goal_cells, path=self.path)
+        grid.draw_grid_map(waypoints=goal_cells, path=self.path)
 
     def yaw_from_quaternion(self, q):
         '''Returns yaw angle (in rad) for orientation based on given quaternion input q'''
@@ -171,6 +175,42 @@ class WaypointNode(Node):
         self.waypoints = waypoints
         self.current_waypoint_idx = 0
 
+    def convert_maparray(self, map_array, threshold = 50):  #Convert nparray to cell_array
+        dim1 = map_array.shape[0]
+        dim2 = map_array.shape[1]
+
+        res = [[0 for _ in range(dim2)] for _ in range(dim1)]
+
+        for i in range(dim1):
+            for j in range(dim2):
+                status = False if map_array[i][j] > threshold else True
+                res[i][j] = Cell(0, (i,j), status)
+
+        return res
+
+    def reset_map(self,map_array, goal_position):    #go through every cell in the map ,intialize and compute heuristic. Call when reach goal point
+        for i in range(len(map_array)):
+            for j in range(len(map_array[i])):
+                node = map_array[i][j]
+                dx = abs(node.position[0] - goal_position[0])
+                dy = abs(node.position[1] - goal_position[1])
+                node.h = 1.0 * (dx + dy) + (1.414 - 2 * 1.0) * min(dx, dy)
+                node.F = np.inf
+                node.g = np.inf
+                node.parent = None
+
+    def print_convert_map(self, convert_map):   #for debugging
+        output = []
+
+        for row in convert_map:
+            output_row = []
+            for cell in row:
+                output_row.append("True" if cell.status else "False")
+            output.append(output_row)
+
+        for row in output:
+            print(" ".join(row))
+
     def timer_callback(self):
         """Controller loop. Insert path planning and PID control logic here"""
         if self.pose is None:
@@ -182,8 +222,22 @@ class WaypointNode(Node):
             self._last_printed_path = list(self.path)
 
         ###### INSERT CODE HERE ######
-        self.move_2D(0.5)
+        #Grid.draw_grid_map()
+        #self.move_2D(0.5)
         ###### INSERT CODE HERE ######
+
+
+
+class Cell():
+    def __init__(self,h,position,status):
+        self.F = np.inf
+        self.g = np.inf
+        self.h = h
+        self.status = status
+        self.position = position
+        self.parent = None
+
+
 
 
 class Grid():
@@ -340,18 +394,16 @@ class Grid():
             print("\033c", end="")  # Clear terminal between frames
             print('\n'.join(''.join(row) for row in display))
             time.sleep(delay)
-class cell:
-    f = inf
-    g = inf
-    h = None
-    status = None
-    position = (0,0)
-    parent = None
-def astar(start:cell, end:cell, grid_convert=None):
 
+
+def astar(start:Cell, end:Cell, grid_convert=None):
+
+    start.g = 0.0
+    start.F = start.h
+    visited = set()
     frontier=[start]
     while(frontier):
-        this_cell = min(frontier, key=lambda cell: cell.f)
+        this_cell = min(frontier, key=lambda cell: cell.F)
         frontier.remove(this_cell)
         visited.add(this_cell)
 
@@ -362,7 +414,7 @@ def astar(start:cell, end:cell, grid_convert=None):
                 path.append(node.position)
                 node = node.parent
             return path[::-1]
-        
+
         for i in range(-1,2):
             for j in range(-1,2):
                 if not (i == 0 and j == 0) and 0<=this_cell.position[0]+i<len(grid_convert) and 0<=this_cell.position[1]+j<len(grid_convert):
@@ -371,20 +423,17 @@ def astar(start:cell, end:cell, grid_convert=None):
                         if i == 0 or j == 0:
                             plan_g = this_cell.g + 1.0
                         else:
-                            plan_g = this_cell.g + 1.414  
+                            plan_g = this_cell.g + 1.414
 
                         if plan_g < this_child_cell.g:
                             this_child_cell.g = plan_g
-                            this_child_cell.f = plan_g + this_child_cell.h
+                            this_child_cell.F = plan_g + this_child_cell.h
                             this_child_cell.parent = this_cell
 
                             if this_child_cell not in frontier:
                                 frontier.append(this_child_cell)
     return None
 
-
-                        
-                            
 
 def main(args=None):
     global max_translate_velocity
