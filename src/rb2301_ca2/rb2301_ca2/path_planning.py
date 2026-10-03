@@ -124,8 +124,6 @@ class WaypointNode(Node):
         self.grid_convert = self.convert_maparray(self.map_array)
         self.print_convert_map(self.grid_convert)   #test convert_maparray
 
-        self.cell_map = self.convert_maparray(map_array=self.map_array)
-
     def print_map(self):
         '''Prints the occupancy grid to the terminal: walls, your current position ('S'), all goal points ('W'/'G'),
         and your planned route (self.path) if you've set one ('*'). Safe to call anytime pose is known; does nothing
@@ -238,14 +236,14 @@ class WaypointNode(Node):
         end_pose_in_grid   = world_to_grid(self.goal_list[0][0],self.goal_list[0][1],self.origin,resolution=self.resolution)        
         start_cell = Cell(h=0,position=start_pose_in_grid,status=True)
         end_cell = Cell(h=0,position=end_pose_in_grid,status=True)
-        self.reset_map(self.cell_map,end_pose_in_grid)        
-        path = astar(start=start_cell,end=end_cell,grid_convert=self.cell_map)
+        self.reset_map(self.grid_convert,end_pose_in_grid)        
+        path = astar(start=start_cell,end=end_cell,grid_convert=self.grid_convert)
 
         if path is not None:
             self.path = path
             path_in_world = [grid_to_world(grid_pos[0],grid_pos[1],origin=self.origin,resolution=self.resolution) for grid_pos in path]            
             self.set_waypoints(path_in_world)
-            self.print_convert_map(self.cell_map)
+            self.print_convert_map(self.grid_convert)
             self.goal_list.pop(0)
             return path
         else:
