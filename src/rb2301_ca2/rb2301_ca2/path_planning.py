@@ -3,6 +3,7 @@ import ast
 import configparser
 import os
 import time
+import sys
 
 import numpy as np
 import heapq
@@ -21,7 +22,7 @@ from geometry_msgs.msg import Twist
 
 
 np.set_printoptions(
-    2, suppress=True, threshold=np.inf
+    2, suppress=True, threshold=sys.maxsize
 )  # Print numpy arrays to specified d.p., suppress scientific notation (e.g. 1e-5), and do not truncate
 
 set_logger_level("waypoint", level=LoggingSeverity.INFO) # Configure to either LoggingSeverity.INFO or LoggingSeverity.DEBUG
@@ -89,7 +90,7 @@ def load_irl_config(maze_index:int) -> dict:
 
 class WaypointNode(Node):
     '''Node to calculate path and move robot towards given goal_coordinates, using pose info from either gazebo odometer or optitrack'''
-    def __init__(self, map_array:np.array, goal_list:list, is_simulation:bool=True, origin:tuple=(0.0, 0.0), resolution:float=occupancy_grid_resolution):
+    def __init__(self, map_array:np.ndarray, goal_list:list, is_simulation:bool=True, origin:tuple=(0.0, 0.0), resolution:float=occupancy_grid_resolution):
         super().__init__('waypoint')
         self.get_logger().info("Starting WaypointNode")
 
@@ -143,21 +144,19 @@ class WaypointNode(Node):
         cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
         return np.arctan2(siny_cosp, cosy_cosp)
 
-    def optitrack_callback(self, msg:PoseStamped):
+    def optitrack_callback(self, msg:PoseStamped) -> None:
         '''Callback to calculate 2D pose info from Optitrack node. Pose info includes x and y coordinates, as well as heading in degrees.
         This callback will run everytime the rclpy executor spins'''
         x, y = msg.pose.position.x, msg.pose.position.y
         heading = np.rad2deg(self.yaw_from_quaternion(msg.pose.orientation))
         self.pose = np.array((x,y,heading))
-        return self.pose
 
-    def odometer_callback(self, msg):
+    def odometer_callback(self, msg:Odometry) -> None:
         '''Callback to calculate 2D pose info from Gazebo odomoter. Pose info includes x and y coordinates, as well as heading in degrees.
         This callback will run everytime the rclpy executor spins'''
         latest_pose_msg = msg.pose.pose
         heading = np.rad2deg(self.yaw_from_quaternion(latest_pose_msg.orientation))
         self.pose = np.array((latest_pose_msg.position.x, latest_pose_msg.position.y, heading))
-        return self.pose
 
     def move_2D(self, x:float=0.0, y:float=0.0, turn:float=0.0):
         '''Publishes a Twist message to ROS to move a robot. Inputs are x and y linear velocities, as well as turn (z-axis yaw) angular velocity.'''
@@ -179,12 +178,9 @@ class WaypointNode(Node):
         dim1 = map_array.shape[0]
         dim2 = map_array.shape[1]
 
-        res = [[0 for _ in range(dim2)] for _ in range(dim1)]
+        
+        res = [[Cell(0, (i,j), status=(map_array[i][j] > threshold)) for i in range(dim2)] for j in range(dim1)]
 
-        for i in range(dim1):
-            for j in range(dim2):
-                status = False if map_array[i][j] > threshold else True
-                res[i][j] = Cell(0, (i,j), status)
 
         return res
 
@@ -215,7 +211,7 @@ class WaypointNode(Node):
         """Controller loop. Insert path planning and PID control logic here"""
         if self.pose is None:
             return # Does not run if no pose received from Odom or Optitrack
-        self.get_logger().debug(f"Pose: {self.pose}")
+        #self.get_logger().debug(f"Pose: {self.pose}")
 
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
             self.print_map()
@@ -224,6 +220,7 @@ class WaypointNode(Node):
         ###### INSERT CODE HERE ######
         #Grid.draw_grid_map()
         #self.move_2D(0.5)
+
         ###### INSERT CODE HERE ######
 
 
@@ -253,7 +250,7 @@ class Grid():
         starting_position : tuple of starting indices within the numpy array
         goal_position : tuple of goal indices within the numpy array. Works with negative indices as well
     '''
-    def __init__(self, grid_array:np.array=np.array([]), starting_position:tuple=(0,0), goal_position:tuple=(-1,-1)):
+    def __init__(self, grid_array:np.ndarray=np.array([]), starting_position:tuple=(0,0), goal_position:tuple=(-1,-1)):
         self.grid = grid_array
         self.shape = self.grid.shape
         self.starting_position = starting_position
@@ -306,7 +303,7 @@ class Grid():
         else:
             return False
 
-    def _colour_grid(self, waypoints:list=(), path:list=(), obstacle_threshold:float=50) -> np.array:
+    def _colour_grid(self, waypoints:list=[], path:list=[], obstacle_threshold:float=50) -> np.ndarray:
         '''Builds the (H, W, 3) colour image array shared by draw_grid_map. Maze walls in blue, empty space in white, path taken in green and waypoints in red'''
         image_grid = np.ones((self.grid.shape[0],self.grid.shape[1],3), dtype=np.uint8)
         image_grid[self.grid <= obstacle_threshold] = (255,255,255)
@@ -320,7 +317,7 @@ class Grid():
 
         return image_grid
 
-    def draw_grid_map(self, waypoints:list=(), path:list=(), obstacle_threshold:float=50, save_path:str=None, show:bool=True):
+    def draw_grid_map(self, waypoints:list=[], path:list=[], obstacle_threshold:float=50, save_path=None, show:bool=True):
         '''Creates an image of the maze and path taken. Maze walls in blue, empty space in white, path taken in green and waypoints in red
 
         Args:
@@ -348,7 +345,7 @@ class Grid():
         if show:
             img.show()
 
-    def print_grid_map(self, waypoints:list=(), path:list=(), obstacle_threshold:float=50):
+    def print_grid_map(self, waypoints:list=[], path:list=[], obstacle_threshold:float=50):
         '''Prints an ASCII-art version of the maze to the terminal: '#' wall, '.' free, '*' solution path, 'W' waypoint, 'S' start, 'G' goal
 
         Args:
@@ -368,7 +365,7 @@ class Grid():
         display = np.flip(chars, axis=1)[::-1]
         print('\n'.join(''.join(row) for row in display))
 
-    def animate_path(self, path:list, waypoints:list=(), obstacle_threshold:float=50, delay:float=0.2):
+    def animate_path(self, path:list, waypoints:list=[], obstacle_threshold:float=50, delay:float=0.2):
         '''Animates the robot moving along path, one cell at a time, by reprinting the ASCII-art map to the terminal.
         'R' marks the robot's current cell, '*' cells it has already passed through.
 
@@ -396,7 +393,7 @@ class Grid():
             time.sleep(delay)
 
 
-def astar(start:Cell, end:Cell, grid_convert=None):
+def astar(start:Cell, end:Cell, grid_convert:list):
 
     start.g = 0.0
     start.f = start.h
