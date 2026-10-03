@@ -179,7 +179,13 @@ class WaypointNode(Node):
         dim2 = map_array.shape[1]
 
         
-        res = [[Cell(0, (i,j), status=(map_array[i][j] > threshold)) for i in range(dim2)] for j in range(dim1)]
+        res = [
+            [
+                Cell(0, (i, j), status=(map_array[i][j] > threshold))
+                for j in range(dim2)
+            ]
+            for i in range(dim1)
+        ]
 
 
         return res
@@ -217,6 +223,9 @@ class WaypointNode(Node):
             self.print_map()
             self._last_printed_path = list(self.path)
 
+    def gen_path(self)->list:
+
+        return 
         ###### INSERT CODE HERE ######
         #Grid.draw_grid_map()
         #self.move_2D(0.5)
