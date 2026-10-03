@@ -124,6 +124,8 @@ class WaypointNode(Node):
         self.grid_convert = self.convert_maparray(self.map_array)
         self.print_convert_map(self.grid_convert)   #test convert_maparray
 
+        self.cell_map = self.convert_maparray(map_array=self.map_array)
+
     def print_map(self):
         '''Prints the occupancy grid to the terminal: walls, your current position ('S'), all goal points ('W'/'G'),
         and your planned route (self.path) if you've set one ('*'). Safe to call anytime pose is known; does nothing
@@ -181,7 +183,7 @@ class WaypointNode(Node):
         
         res = [
             [
-                Cell(0, (i, j), status=(map_array[i][j] > threshold))
+                Cell(0, (i, j), status=(map_array[i][j] < threshold))
                 for j in range(dim2)
             ]
             for i in range(dim1)
@@ -201,7 +203,7 @@ class WaypointNode(Node):
                 node.g = np.inf
                 node.parent = None
 
-    def print_convert_map(self, convert_map):   #for debugging
+    def print_convert_map(self, convert_map:list[list["Cell"]]):   #for debugging
         output = []
 
         for row in convert_map:
@@ -222,20 +224,39 @@ class WaypointNode(Node):
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
             self.print_map()
             self._last_printed_path = list(self.path)
-
-    def gen_path(self)->list:
-
-        return 
         ###### INSERT CODE HERE ######
         #Grid.draw_grid_map()
         #self.move_2D(0.5)
 
         ###### INSERT CODE HERE ######
+    def gen_path(self)->list:
+        if not self.goal_list:
+            self.get_logger().info("reach the desitination!")
+            return True
+        
+        start_pose_in_grid = world_to_grid(self.pose[0],self.pose[1],self.origin,resolution=self.resolution)
+        end_pose_in_grid   = world_to_grid(self.goal_list[0][0],self.goal_list[0][1],self.origin,resolution=self.resolution)        
+        start_cell = Cell(h=0,position=start_pose_in_grid,status=True)
+        end_cell = Cell(h=0,position=end_pose_in_grid,status=True)
+        self.reset_map(self.cell_map,end_pose_in_grid)        
+        path = astar(start=start_cell,end=end_cell,grid_convert=self.cell_map)
+
+        if path is not None:
+            self.path = path
+            path_in_world = [grid_to_world(grid_pos[0],grid_pos[1],origin=self.origin,resolution=self.resolution) for grid_pos in path]            
+            self.set_waypoints(path_in_world)
+            self.print_convert_map(self.cell_map)
+            self.goal_list.pop(0)
+            return path
+        else:
+            self.get_logger().error('Pathfinding failed!')
+            return False
+
 
 
 
 class Cell():
-    def __init__(self,h,position,status):
+    def __init__(self,h:float,position:tuple,status:bool):
         self.f = np.inf
         self.g = np.inf
         self.h = h
@@ -402,7 +423,7 @@ class Grid():
             time.sleep(delay)
 
 
-def astar(start:Cell, end:Cell, grid_convert:list):
+def astar(start:Cell, end:Cell, grid_convert:list)->list:
 
     start.g = 0.0
     start.f = start.h
@@ -423,7 +444,7 @@ def astar(start:Cell, end:Cell, grid_convert:list):
 
         for i in range(-1,2):
             for j in range(-1,2):
-                if not (i == 0 and j == 0) and 0<=this_cell.position[0]+i<len(grid_convert) and 0<=this_cell.position[1]+j<len(grid_convert):
+                if not (i == 0 and j == 0) and 0<=this_cell.position[0]+i<len(grid_convert) and 0<=this_cell.position[1]+j<len(grid_convert[0]):
                     this_child_cell = grid_convert[this_cell.position[0]+i][this_cell.position[1]+j]
                     if this_child_cell.status == True:
                         if i == 0 or j == 0:
