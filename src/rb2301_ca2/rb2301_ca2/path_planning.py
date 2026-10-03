@@ -124,6 +124,8 @@ class WaypointNode(Node):
         self.grid_convert = self.convert_maparray(self.map_array)
         self.print_convert_map(self.grid_convert)   #test convert_maparray
 
+        self.plan_init = False
+
     def print_map(self):
         '''Prints the occupancy grid to the terminal: walls, your current position ('S'), all goal points ('W'/'G'),
         and your planned route (self.path) if you've set one ('*'). Safe to call anytime pose is known; does nothing
@@ -169,9 +171,11 @@ class WaypointNode(Node):
         self.publisher_.publish(twist_msg)
 
     def set_waypoints(self, waypoints:list):    #
-        '''Set new waypoints when a goal has been reached'''
+        '''Set new waypoints when a goal has been reached
+            self.waypoints_in_world is provided for controller to follow the path'''
         self.goal_reached = False
         self.waypoints = waypoints
+        self.waypoints_in_world = [grid_to_world(waypoint[0],waypoint[1],origin=self.origin,resolution=self.resolution) for waypoint in waypoints]
         self.current_waypoint_idx = 0
 
     def convert_maparray(self, map_array, threshold = 50):  #Convert nparray to cell_array
@@ -219,9 +223,21 @@ class WaypointNode(Node):
             return # Does not run if no pose received from Odom or Optitrack
         #self.get_logger().debug(f"Pose: {self.pose}")
 
+        if not self.plan_init:   #First plan
+            self.plan_init = True
+            self.goal_reached = False
+            path = self.gen_path()
+            waypoints = self.gen_waypoints()
+            self.set_waypoints(waypoints)
+
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
             self.print_map()
             self._last_printed_path = list(self.path)
+
+        if self.goal_reached == True:
+            self.reset_planning()
+
+        
         ###### INSERT CODE HERE ######
         #Grid.draw_grid_map()
         #self.move_2D(0.5)
@@ -243,9 +259,9 @@ class WaypointNode(Node):
 
         if path is not None:
             self.path = path
-            self.path_in_world = [grid_to_world(grid_pos[0],grid_pos[1],origin=self.origin,resolution=self.resolution) for grid_pos in path]            
+            #self.path_in_world = [grid_to_world(grid_pos[0],grid_pos[1],origin=self.origin,resolution=self.resolution) for grid_pos in path]       #Replaced by waypoints          
             #self.print_convert_map(self.grid_convert)
-            self.goal_list.pop(0)
+            #self.goal_list.pop(0)                      #This should be handeled when confirm goal reached
             return path
         else:
             self.get_logger().error('Pathfinding failed!')
@@ -270,7 +286,16 @@ class WaypointNode(Node):
                     waypoints.append(current)   
 
         waypoints.append(self.path[-1])
-        return waypoints
+        return waypoints        
+
+    def reset_planning(self):   #Called when controller confirm reach previous goal (goal_reached == True)
+        if (len(self.goal_list) == 1):
+            self.get_logger().info("Final goal reached!")
+            return
+        self.goal_list.pop(0)
+        path = self.gen_path()
+        waypoints = self.gen_waypoints()
+        self.set_waypoints(waypoints)
 
 
 
