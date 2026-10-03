@@ -118,13 +118,13 @@ class WaypointNode(Node):
         self.resolution = resolution # Metres per grid cell for this run (0.2 sim, 0.1 real -- real maze is half scale). Use with grid_to_world()/world_to_grid()
 
         self.pose = None
-        self.path = [] # Set this to your planned route (a list of grid-index tuples, in travel order) once you've computed it -- it'll automatically show up in the terminal map print
+        self.path = [] # Set this to your planned route in grid map (a list of grid-index tuples, in travel order) once you've computed it -- it'll automatically show up in the terminal map print
         self._last_printed_path = None
 
         self.grid_convert = self.convert_maparray(self.map_array)
         self.print_convert_map(self.grid_convert)   #test convert_maparray
 
-        self.cell_map = self.convert_maparray(map_array=self.map_array)
+        self.plan_init = False
 
     def print_map(self):
         '''Prints the occupancy grid to the terminal: walls, your current position ('S'), all goal points ('W'/'G'),
@@ -137,8 +137,8 @@ class WaypointNode(Node):
         current_cell = clip(world_to_grid(self.pose[0], self.pose[1], self.origin, self.resolution))
         goal_cells = [clip(world_to_grid(gx, gy, self.origin, self.resolution)) for gx, gy in self.goal_list]
         grid = Grid(self.map_array, starting_position=current_cell, goal_position=goal_cells[-1])
-        grid.print_grid_map(waypoints=goal_cells, path=self.path)
-        grid.draw_grid_map(waypoints=goal_cells, path=self.path)
+        grid.print_grid_map(waypoints=self.waypoints, path=self.path)
+        grid.draw_grid_map(waypoints=self.waypoints, path=self.path)
 
     def yaw_from_quaternion(self, q):
         '''Returns yaw angle (in rad) for orientation based on given quaternion input q'''
@@ -170,10 +170,12 @@ class WaypointNode(Node):
         twist_msg.angular.x, twist_msg.angular.y, twist_msg.angular.z = 0.0, 0.0, float(turn)
         self.publisher_.publish(twist_msg)
 
-    def set_waypoints(self, waypoints:list):
-        '''Set new waypoints when a goal has been reached'''
+    def set_waypoints(self, waypoints:list):    #
+        '''Set new waypoints when a goal has been reached
+            self.waypoints_in_world is provided for controller to follow the path'''
         self.goal_reached = False
         self.waypoints = waypoints
+        self.waypoints_in_world = [grid_to_world(waypoint[0],waypoint[1],origin=self.origin,resolution=self.resolution) for waypoint in waypoints]
         self.current_waypoint_idx = 0
 
     def convert_maparray(self, map_array, threshold = 50):  #Convert nparray to cell_array
@@ -221,14 +223,28 @@ class WaypointNode(Node):
             return # Does not run if no pose received from Odom or Optitrack
         #self.get_logger().debug(f"Pose: {self.pose}")
 
+        if not self.plan_init:   #First plan
+            self.plan_init = True
+            self.goal_reached = False
+            path = self.gen_path()
+            waypoints = self.gen_waypoints()
+            self.set_waypoints(waypoints)
+
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
             self.print_map()
             self._last_printed_path = list(self.path)
+
+        if self.goal_reached == True:
+            self.reset_planning()
+
+        
         ###### INSERT CODE HERE ######
         #Grid.draw_grid_map()
         #self.move_2D(0.5)
 
         ###### INSERT CODE HERE ######
+
+
     def gen_path(self)->list:
         if not self.goal_list:
             self.get_logger().info("reach the desitination!")
@@ -238,20 +254,48 @@ class WaypointNode(Node):
         end_pose_in_grid   = world_to_grid(self.goal_list[0][0],self.goal_list[0][1],self.origin,resolution=self.resolution)        
         start_cell = Cell(h=0,position=start_pose_in_grid,status=True)
         end_cell = Cell(h=0,position=end_pose_in_grid,status=True)
-        self.reset_map(self.cell_map,end_pose_in_grid)        
-        path = astar(start=start_cell,end=end_cell,grid_convert=self.cell_map)
+        self.reset_map(self.grid_convert,end_pose_in_grid)        
+        path = astar(start=start_cell,end=end_cell,grid_convert=self.grid_convert)
 
         if path is not None:
             self.path = path
-            path_in_world = [grid_to_world(grid_pos[0],grid_pos[1],origin=self.origin,resolution=self.resolution) for grid_pos in path]            
-            self.set_waypoints(path_in_world)
-            self.print_convert_map(self.cell_map)
-            self.goal_list.pop(0)
+            #self.path_in_world = [grid_to_world(grid_pos[0],grid_pos[1],origin=self.origin,resolution=self.resolution) for grid_pos in path]       #Replaced by waypoints          
+            #self.print_convert_map(self.grid_convert)
+            #self.goal_list.pop(0)                      #This should be handeled when confirm goal reached
             return path
         else:
             self.get_logger().error('Pathfinding failed!')
             return False
 
+    def gen_waypoints(self)->list:  #Set waypoints for controller to excute. Goal cell included, starting cell excluded.
+        if(not self.path):
+            self.get_logger().error('Waypoints generation failed: no path provided!')
+            return False
+
+        waypoints = []
+        if(len(self.path)<=2):
+            pass
+        else:
+            for i in range(1, len(self.path) - 1):
+                previous, current, following = self.path[i-1:i+2]
+
+                incoming = (current[0] - previous[0], current[1] - previous[1])
+                outgoing = (following[0] - current[0], following[1] - current[1])
+
+                if incoming != outgoing:
+                    waypoints.append(current)   
+
+        waypoints.append(self.path[-1])
+        return waypoints        
+
+    def reset_planning(self):   #Called when controller confirm reach previous goal (goal_reached == True)
+        if (len(self.goal_list) == 1):
+            self.get_logger().info("Final goal reached!")
+            return
+        self.goal_list.pop(0)
+        path = self.gen_path()
+        waypoints = self.gen_waypoints()
+        self.set_waypoints(waypoints)
 
 
 
@@ -423,7 +467,7 @@ class Grid():
             time.sleep(delay)
 
 
-def astar(start:Cell, end:Cell, grid_convert:list)->list:
+def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list containing (int, int) representing each cell positions along the path in grid map
 
     start.g = 0.0
     start.f = start.h
