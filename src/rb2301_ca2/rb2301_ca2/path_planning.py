@@ -137,8 +137,8 @@ class WaypointNode(Node):
         current_cell = clip(world_to_grid(self.pose[0], self.pose[1], self.origin, self.resolution))
         goal_cells = [clip(world_to_grid(gx, gy, self.origin, self.resolution)) for gx, gy in self.goal_list]
         grid = Grid(self.map_array, starting_position=current_cell, goal_position=goal_cells[-1])
-        grid.print_grid_map(waypoints=goal_cells, path=self.path)
-        grid.draw_grid_map(waypoints=goal_cells, path=self.path)
+        grid.print_grid_map(waypoints=self.waypoints, path=self.path)
+        grid.draw_grid_map(waypoints=self.waypoints, path=self.path)
 
     def yaw_from_quaternion(self, q):
         '''Returns yaw angle (in rad) for orientation based on given quaternion input q'''
