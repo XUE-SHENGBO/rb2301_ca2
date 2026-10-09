@@ -4,6 +4,7 @@ import configparser
 import os
 import time
 import sys
+import math
 
 import numpy as np
 import heapq
@@ -19,6 +20,8 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from PIL import Image
 from geometry_msgs.msg import Twist
+
+KP = 1.0
 
 
 np.set_printoptions(
@@ -216,26 +219,49 @@ class WaypointNode(Node):
             return # Does not run if no pose received from Odom or Optitrack
         #self.get_logger().debug(f"Pose: {self.pose}")
 
-        if not self.plan_init:   #First plan
+        if not self.plan_init:   #Initialize plan & controll
             self.plan_init = True
             self.goal_reached = False
             path = self.gen_path()
             waypoints = self.gen_waypoints()
             self.set_waypoints(waypoints)
+            self.current_waypoint_in_world = self.waypoints_in_world[self.current_waypoint_in_world_idx]
+            self.reset_controller(self.current_waypoint_in_world)
+            self.goal_reached == False
 
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
             self.print_map()
             self._last_printed_path = list(self.path)
 
-        if self.goal_reached == True:
+        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=0.3): #Called when current goal reached, excute reset
+            self.goal_reached == True
             self.reset_planning()
 
-        
-        ###### INSERT CODE HERE ######
-        #Grid.draw_grid_map()
-        #self.move_2D(0.5)
+        #--------↑ planning ----------#
 
-        ###### INSERT CODE HERE ######
+        #--------↓ controlling -------#
+
+        self.current_waypoint_in_world = self.waypoints_in_world[self.current_waypoint_in_world_idx]
+
+        if self.is_reached(goal=self.current_waypoint_in_world, threshold=0.3): #Called when current waypoint reached, excute reset
+            self.current_waypoint_in_world_idx += 1
+            self.reset_controller(goal=self.waypoints_in_world[self.current_waypoint_in_world_idx])
+
+
+        distance = self.compute_distance(self.current_waypoint_in_world)
+        heading_difference = self.compute_heading_difference(self.current_waypoint_in_world)
+
+        control_output_forward = self.forward_controller.compute( distance )
+        control_output_turning = self.turning_controller.compute( heading_difference )
+
+        self.move_2D(control_output_forward, 0, control_output_turning)
+        
+
+
+        self.get_logger().debug("" + str(self.pose[0]) + str(self.pose[1]))
+
+
+        
 
 #----------Phase1: Planning------------#
     def gen_path(self)->list:
@@ -296,11 +322,60 @@ class WaypointNode(Node):
         self.goal_reached = False
         self.waypoints = waypoints
         self.waypoints_in_world = [grid_to_world(waypoint[0],waypoint[1],origin=self.origin,resolution=self.resolution) for waypoint in waypoints]
-        self.current_waypoint_idx = 0
+        self.current_waypoint_in_world_idx = 0
 
 #----------Phase2: Controlling---------#
+    def reset_controller(self, goal:(float, float)):
+        dx =  goal[0] - self.pose[0]
+        dy =  goal[1] - self.pose[1]
 
-    
+        distance = self.compute_distance(goal)
+        heading_difference = self.compute_heading_difference(goal)
+
+        self.forward_controller = self.PController(Kp=KP * 0.5, setpoint=distance)
+        self.turning_controller = self.PController(Kp=KP * 1, setpoint=heading_difference)
+
+    def compute_distance(self, goal)->float:
+        dx =  goal[0] - self.pose[0]
+        dy =  goal[1] - self.pose[1]
+
+        return math.sqrt( dx**2 + dy**2 )
+
+    def compute_heading_difference(self, goal)->float:
+        dx =  goal[0] - self.pose[0]
+        dy =  goal[1] - self.pose[1]
+
+        desired_heading = math.atan2(dy, dx)
+        current_heading = math.radians(self.pose[2])
+
+        error = desired_heading - current_heading
+        return math.degrees(math.atan2(math.sin(error), math.cos(error)))
+
+      
+    def is_reached(self,goal,threshold:float)->bool:
+        return self.compute_distance(goal) <= threshold
+
+
+    #def move_to_next_goal(self, goal):
+
+    class PController:
+        def __init__(self, Kp, setpoint):
+            self.Kp = Kp
+            self.setpoint = setpoint
+            self.previous_error = 0
+        
+        def compute(self, error):
+            #error = self.setpoint - process_variable
+
+            P_out = self.Kp * error
+
+            self.previous_error = error
+            
+            return P_out
+        
+        
+
+
 
 class Cell():
     def __init__(self,h:float,position:tuple,status:bool):
@@ -400,7 +475,7 @@ class Grid():
         Args:
             waypoints : list (or other iterable) of tuple coordinates representing all the grid indices for the waypoints. Will be represented in red, takes precedence over path
             path : list (or other iterable) of tuple coordinates representing all the grid indices forming the solution path. Will be represented in green
-            obstacle_threshold : Optional float to indicate threshhold for whether a grid is considered occupied. Not important for ca2
+            obstacle_threshold : Optional float to indicate threshold for whether a grid is considered occupied. Not important for ca2
             save_path : Optional file path (e.g. "path_result.png") to save the image to, in addition to/instead of showing it
             show : Whether to pop up the image in a viewer (default True). Set to False if you only want to save it
         '''
@@ -428,7 +503,7 @@ class Grid():
         Args:
             waypoints : list (or other iterable) of tuple coordinates representing all the grid indices for the waypoints
             path : list (or other iterable) of tuple coordinates representing all the grid indices forming the solution path
-            obstacle_threshold : Optional float to indicate threshhold for whether a grid is considered occupied. Not important for ca2
+            obstacle_threshold : Optional float to indicate threshold for whether a grid is considered occupied. Not important for ca2
         '''
         chars = np.where(self.grid > obstacle_threshold, '#', '.').astype('<U1')
 
@@ -449,7 +524,7 @@ class Grid():
         Args:
             path : list of tuple grid indices forming the solution path, in travel order
             waypoints : list (or other iterable) of tuple coordinates representing all the grid indices for the waypoints
-            obstacle_threshold : Optional float to indicate threshhold for whether a grid is considered occupied. Not important for ca2
+            obstacle_threshold : Optional float to indicate threshold for whether a grid is considered occupied. Not important for ca2
             delay : Seconds to pause between animation frames
         '''
         path = list(path)
