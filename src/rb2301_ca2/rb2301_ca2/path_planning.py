@@ -170,13 +170,6 @@ class WaypointNode(Node):
         twist_msg.angular.x, twist_msg.angular.y, twist_msg.angular.z = 0.0, 0.0, float(turn)
         self.publisher_.publish(twist_msg)
 
-    def set_waypoints(self, waypoints:list):    #
-        '''Set new waypoints when a goal has been reached
-            self.waypoints_in_world is provided for controller to follow the path'''
-        self.goal_reached = False
-        self.waypoints = waypoints
-        self.waypoints_in_world = [grid_to_world(waypoint[0],waypoint[1],origin=self.origin,resolution=self.resolution) for waypoint in waypoints]
-        self.current_waypoint_idx = 0
 
     def convert_maparray(self, map_array, threshold = 50):  #Convert nparray to cell_array
         dim1 = map_array.shape[0]
@@ -244,7 +237,7 @@ class WaypointNode(Node):
 
         ###### INSERT CODE HERE ######
 
-
+#----------Phase1: Planning------------#
     def gen_path(self)->list:
         if not self.goal_list:
             self.get_logger().info("reach the desitination!")
@@ -297,7 +290,17 @@ class WaypointNode(Node):
         waypoints = self.gen_waypoints()
         self.set_waypoints(waypoints)
 
+    def set_waypoints(self, waypoints:list):    #
+        '''Set new waypoints when a goal has been reached
+            self.waypoints_in_world is provided for controller to follow the path'''
+        self.goal_reached = False
+        self.waypoints = waypoints
+        self.waypoints_in_world = [grid_to_world(waypoint[0],waypoint[1],origin=self.origin,resolution=self.resolution) for waypoint in waypoints]
+        self.current_waypoint_idx = 0
 
+#----------Phase2: Controlling---------#
+
+    
 
 class Cell():
     def __init__(self,h:float,position:tuple,status:bool):
