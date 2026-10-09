@@ -299,8 +299,24 @@ class WaypointNode(Node):
         self.current_waypoint_idx = 0
 
 #----------Phase2: Controlling---------#
+    def reset_pid(self):
+        self.forward_controller = PIDController(self, Kp=1.0, Ki=0.1, Kd=0.05, setpoint=setpoint)
+        self.turning_controller = PIDController(self, Kp=1.0, Ki=0.1, Kd=0.05, setpoint=setpoint)
+       
 
-    
+    def move_to_next_goal(self, goal):
+
+    class PIDController:
+        def __init__(self, Kp, Ki, Kd, setpoint):
+            self.Kp = Kp
+            self.Ki = Ki
+            self.Kd = Kd
+            self.setpoint = setpoint
+            self.previous_error = 0
+            self.integral = 0
+        
+
+
 
 class Cell():
     def __init__(self,h:float,position:tuple,status:bool):
