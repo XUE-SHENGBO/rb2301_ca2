@@ -22,6 +22,8 @@ from PIL import Image
 from geometry_msgs.msg import Twist
 
 KP = 1.0
+KI = 1.0
+KD = 1.0
 
 
 np.set_printoptions(
