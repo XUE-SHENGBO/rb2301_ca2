@@ -310,7 +310,7 @@ class WaypointNode(Node):
         control_output_turning = self.turning_controller.compute( heading_difference )
 
         #self.move_2D(control_output_forward, 0, control_output_turning)
-        self.move_2D(0.4, 0, control_output_turning)
+        self.move_2D(0.3, 0, control_output_turning)
 
         self.last_velocity = self.actual_velocity
         #self.get_logger().info(f'heading_diff:{heading_difference},control_turning:{control_output_turning}')
