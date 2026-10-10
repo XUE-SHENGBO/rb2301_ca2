@@ -20,11 +20,11 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from PIL import Image
 from geometry_msgs.msg import Twist
-
+from std_msgs.msg import Float64
 KP = 1.0
 KI = 1.0
 KD = 1.00
-
+PI = 3.1415926
 
 np.set_printoptions(#设定numpy数组打印格式，小数点后2位，禁止科学计数法，数组省略上限：非常大
     2, suppress=True, threshold=sys.maxsize
@@ -38,7 +38,7 @@ max_translate_velocity = 1.4 # Overwritten in main() based on sim vs real-life; 
 
 CONTROL_PERIOD = 0.05
 _PACKAGE_DIR = os.path.dirname(os.path.realpath(__file__))#留下目录（获取这个脚本的绝对路径）
-TARGET_SPEED = 0.3
+TARGET_SPEED = 0.8
 
 # --- Coordinate conversion --------------------------------------------------
 # A grid index (i, j) represents a CELL, not a point. That cell's world
@@ -136,6 +136,13 @@ class WaypointNode(Node):
 
         self.plan_init = False
         self.finished = False
+
+        # rqt_plot: speed in m/s, both headings in radians.
+        self.telemetry_publishers = {
+            name: self.create_publisher(Float64, name, 10)
+            for name in ('target_velocity', 'target_heading',
+                         'actual_velocity', 'actual_heading')
+        }
 
     def print_map(self):
         '''Prints the occupancy grid to the terminal: walls, your current position ('S'), all goal points ('W'/'G'),
@@ -301,21 +308,37 @@ class WaypointNode(Node):
         #distance = self.compute_distance(self.current_waypoint_in_world)
         if self.actual_velocity is None:
             return
+
+
+        dx =  self.current_waypoint_in_world[0] - self.pose[0]
+        dy =  self.current_waypoint_in_world[1] - self.pose[1]
+        desired_heading = math.atan2(dy, dx)
+
         heading_difference = self.compute_heading_difference(self.current_waypoint_in_world)
         distance = self.compute_distance(self.current_waypoint_in_world)
-        target_speed = min(TARGET_SPEED, distance) * max(0.0, math.cos(heading_difference))
+
+        target_speed = TARGET_SPEED*max(0,1-abs(heading_difference/2/PI)-min(np.exp(-distance),0.8))#角度差90度=完全不前进，离目标越近指数地变慢，最多减20%
         speed_difference = target_speed - self.actual_velocity[0]
         #if 
         control_output_forward = self.forward_controller.compute( speed_difference )
         control_output_turning = self.turning_controller.compute( heading_difference )
 
         #self.move_2D(control_output_forward, 0, control_output_turning)
-        self.move_2D(0.3, 0, control_output_turning)
+        self.move_2D(control_output_forward, 0, control_output_turning)
 
         self.last_velocity = self.actual_velocity
         #self.get_logger().info(f'heading_diff:{heading_difference},control_turning:{control_output_turning}')
 
         self.get_logger().debug("" + str(self.pose[0]) + str(self.pose[1]))
+
+        telemetry = {
+            'target_velocity': target_speed,
+            'target_heading': desired_heading,
+            'actual_velocity': self.actual_velocity[0],
+            'actual_heading': math.radians(self.pose[2]),
+        }
+        for name, value in telemetry.items():
+            self.telemetry_publishers[name].publish(Float64(data=float(value)))
 #===================================================================================================================================
 
         
@@ -399,8 +422,8 @@ class WaypointNode(Node):
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
         self.pose_history = []#重置
-        self.forward_controller = self.PIController(Kp=0.5,Ki=0.0,Kd=0.0, output_limit=max_translate_velocity)
-        self.turning_controller = self.PIController(Kp=2,Ki=0.5,Kd=0.2, output_limit=max_translate_velocity * 2)
+        self.forward_controller = self.PIController(Kp=1,Ki=0.4,Kd=0.0, output_limit=max_translate_velocity)
+        self.turning_controller = self.PIController(Kp=5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
 
         
     def compute_distance(self, goal)->float:
