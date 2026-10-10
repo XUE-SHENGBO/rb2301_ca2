@@ -305,13 +305,16 @@ class WaypointNode(Node):
         distance = self.compute_distance(self.current_waypoint_in_world)
         target_speed = min(TARGET_SPEED, distance) * max(0.0, math.cos(heading_difference))
         speed_difference = target_speed - self.actual_velocity[0]
-
+        #if 
         control_output_forward = self.forward_controller.compute( speed_difference )
         control_output_turning = self.turning_controller.compute( heading_difference )
 
-        self.move_2D(control_output_forward, 0, control_output_turning)
+        #self.move_2D(control_output_forward, 0, control_output_turning)
+        self.move_2D(0.4, 0, control_output_turning)
 
         self.last_velocity = self.actual_velocity
+        #self.get_logger().info(f'heading_diff:{heading_difference},control_turning:{control_output_turning}')
+
         self.get_logger().debug("" + str(self.pose[0]) + str(self.pose[1]))
 #===================================================================================================================================
 
@@ -396,8 +399,8 @@ class WaypointNode(Node):
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
         self.pose_history = []#重置
-        self.forward_controller = self.PIController(Kp=KP * 0.5,Ki=0.5,Kd=0.5, output_limit=max_translate_velocity)
-        self.turning_controller = self.PIController(Kp=KP * 1,Ki=0.5,Kd=0.5, output_limit=max_translate_velocity * 2)
+        self.forward_controller = self.PIController(Kp=0.5,Ki=0.0,Kd=0.0, output_limit=max_translate_velocity)
+        self.turning_controller = self.PIController(Kp=2,Ki=0.5,Kd=0.2, output_limit=max_translate_velocity * 2)
 
         
     def compute_distance(self, goal)->float:
@@ -435,7 +438,7 @@ class WaypointNode(Node):
             self.last_error = error
             candidate_integral = self.accumulated_error + error * CONTROL_PERIOD
             output = self.Kp * error + self.Ki * candidate_integral + self.Kd * derivative
-            # 达到限幅时，仅允许帮助退出饱和的积分更新。
+            # 达到限幅时，仅允许帮助退出饱和的积分更新
             if abs(output) <= self.output_limit or output * error < 0:
                 self.accumulated_error = candidate_integral
             output = self.Kp * error + self.Ki * self.accumulated_error + self.Kd * derivative
