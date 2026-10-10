@@ -279,7 +279,7 @@ class WaypointNode(Node):
             self.reset_controller(self.current_waypoint_in_world)
 
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
-            self.print_map()
+            #self.print_map()
             self._last_printed_path = list(self.path)
 
         if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.25): #Called when current goal reached, excute reset
@@ -317,10 +317,10 @@ class WaypointNode(Node):
         heading_difference = self.compute_heading_difference(self.current_waypoint_in_world)
         distance = self.compute_distance(self.current_waypoint_in_world)
 
-        target_speed = TARGET_SPEED*max(0,1-abs(heading_difference/2/PI)-min(np.exp(-distance),0.8))#角度差90度=完全不前进，离目标越近指数地变慢，最多减20%
+        target_speed = TARGET_SPEED*max(0,1-2*abs(heading_difference/2/PI)-min(np.exp(-distance),0.6))#角度差90度=完全不前进，离目标越近指数地变慢，最多减20%
         speed_difference = target_speed - self.actual_velocity[0]
         #if 
-        control_output_forward = self.forward_controller.compute( speed_difference )
+        control_output_forward = target_speed + self.forward_controller.compute( speed_difference )
         control_output_turning = self.turning_controller.compute( heading_difference )
 
         #self.move_2D(control_output_forward, 0, control_output_turning)
@@ -422,7 +422,7 @@ class WaypointNode(Node):
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
         self.pose_history = []#重置
-        self.forward_controller = self.PIController(Kp=1,Ki=0.4,Kd=0.0, output_limit=max_translate_velocity)
+        self.forward_controller = self.PIController(Kp=0.8,Ki=0.5,Kd=0.0, output_limit=max_translate_velocity)
         self.turning_controller = self.PIController(Kp=5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
 
         
