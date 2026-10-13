@@ -279,7 +279,7 @@ class WaypointNode(Node):
             self.reset_controller(self.current_waypoint_in_world)
 
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
-            #self.print_map()
+            self.print_map()
             self._last_printed_path = list(self.path)
 
         if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.25): #Called when current goal reached, excute reset
@@ -643,6 +643,7 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
     start.f = start.h
     visited = set()
     frontier=[start]
+    state_map
     while(frontier):
         this_cell = min(frontier, key=lambda cell: cell.f)
         frontier.remove(this_cell)
@@ -665,7 +666,16 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
                             plan_g = this_cell.g + 1.0
                         else:
                             plan_g = this_cell.g + 1.414
-
+#===============================================================================
+                        change_orientation_punishment = 0     
+                        if this_cell.parent is not None:
+                            last_orientation = np.array(this_cell.parent.position) - np.array(this_cell.position)
+                            this_orientation = np.array(this_cell.position)-np.array(this_child_cell.position)
+                            if not np.array_equal(last_orientation, this_orientation):
+                                change_orientation_punishment = 5
+                        
+                        plan_g += change_orientation_punishment
+#===============================================================================
                         if plan_g < this_child_cell.g:
                             this_child_cell.g = plan_g
                             this_child_cell.f = plan_g + this_child_cell.h
