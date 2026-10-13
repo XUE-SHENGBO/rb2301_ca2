@@ -666,16 +666,7 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
                             plan_g = this_cell.g + 1.0
                         else:
                             plan_g = this_cell.g + 1.414
-#===============================================================================
-                        change_orientation_punishment = 0     
-                        if this_cell.parent is not None:
-                            last_orientation = np.array(this_cell.parent.position) - np.array(this_cell.position)
-                            this_orientation = np.array(this_cell.position)-np.array(this_child_cell.position)
-                            if not np.array_equal(last_orientation, this_orientation):
-                                change_orientation_punishment = 5
-                        
-                        plan_g += change_orientation_punishment
-#===============================================================================
+
                         if plan_g < this_child_cell.g:
                             this_child_cell.g = plan_g
                             this_child_cell.f = plan_g + this_child_cell.h
