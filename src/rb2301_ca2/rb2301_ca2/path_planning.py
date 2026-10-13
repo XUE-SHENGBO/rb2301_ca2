@@ -770,7 +770,13 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
             for j in range(-1,2):
                 if not (i == 0 and j == 0) and 0<=this_cell.position[0]+i<len(grid_convert) and 0<=this_cell.position[1]+j<len(grid_convert[0]):
                     this_child_cell = grid_convert[this_cell.position[0]+i][this_cell.position[1]+j]
-                    if ( this_child_cell.status == True ) and (not this_child_cell in visited):
+
+                    will_not_stuck = True
+                    if i != 0 and j != 0:
+                        if grid_convert[this_cell.position[0]+i][this_cell.position[1]+0].status ==False or grid_convert[this_cell.position[0]+0][this_cell.position[1]+j].status ==False:
+                            will_not_stuck = False
+
+                    if ( this_child_cell.status == True ) and (not this_child_cell in visited) and will_not_stuck:
                         if i == 0 or j == 0:
                             plan_g = this_cell.g + 1.0
                         else:
