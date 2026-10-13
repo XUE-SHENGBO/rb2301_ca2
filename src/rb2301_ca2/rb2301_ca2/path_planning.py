@@ -770,12 +770,21 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
             for j in range(-1,2):
                 if not (i == 0 and j == 0) and 0<=this_cell.position[0]+i<len(grid_convert) and 0<=this_cell.position[1]+j<len(grid_convert[0]):
                     this_child_cell = grid_convert[this_cell.position[0]+i][this_cell.position[1]+j]
-                    if this_child_cell.status == True:
+                    if ( this_child_cell.status == True ) and (not this_child_cell in visited):
                         if i == 0 or j == 0:
                             plan_g = this_cell.g + 1.0
                         else:
                             plan_g = this_cell.g + 1.414
-
+#===============================================================================
+                        change_orientation_punishment = 0     
+                        if this_cell.parent is not None:
+                            last_orientation = np.array(this_cell.parent.position) - np.array(this_cell.position)
+                            this_orientation = np.array(this_cell.position)-np.array(this_child_cell.position)
+                            if not np.array_equal(last_orientation, this_orientation):
+                                change_orientation_punishment = 0.1
+                        
+                        plan_g += change_orientation_punishment
+#===============================================================================
                         if plan_g < this_child_cell.g:
                             this_child_cell.g = plan_g
                             this_child_cell.f = plan_g + this_child_cell.h
