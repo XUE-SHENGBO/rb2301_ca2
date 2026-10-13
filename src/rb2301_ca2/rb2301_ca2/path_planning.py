@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import argparse
+
 import argparse
 import ast
 import configparser
@@ -7,6 +11,8 @@ import os
 import time
 import sys
 import math
+
+
 
 import numpy as np
 import heapq
@@ -23,8 +29,8 @@ from nav_msgs.msg import Odometry
 from PIL import Image
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64
-KP = 1.0
-KI = 1.0
+KP = 0.25
+KI = 0.5
 KD = 1.00
 PI = 3.1415926
 

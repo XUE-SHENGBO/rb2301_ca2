@@ -161,13 +161,13 @@ You edit on your laptop and copy the package to the robot. The robot runs Ubuntu
 **1. Make a workspace on the robot** (ssh in as usual). Use your group number so groups don't overwrite each other:
 
 ```bash
-mkdir -p ~/Downloads/rb2301_ca2_<group>/src
+mkdir -p ~/Downloads/rb2301_ca2_25/src
 ```
 
 **2. Copy your package.** Run this on your laptop, in a normal terminal, not in the ssh one. Repeat it every time you change `path_planning.py`:
 
 ```bash
-rsync -auvx --delete ~/Documents/rb2301/src/rb2301_ca2 bingda@192.168.1.2NN:~/Downloads/rb2301_ca2_<group>/src
+rsync -auvx --delete ~/Documents/rb2301/src/rb2301_ca2-collab bingda@192.168.1.2NN:~/Downloads/rb2301_ca2_25/src
 ```
 
 The first path is your own `src/rb2301_ca2` on the laptop. `--delete` only affects that one folder on the robot.
@@ -186,7 +186,7 @@ colb
 ```bash
 basecontrol          # terminal 1, drives the wheels
 vrpn                 # terminal 2, Optitrack poses
-cd ~/Downloads/rb2301_ca2_<group> && source install/setup.bash && ros2 run rb2301_ca2 path_planning --run test1     # terminal 3
+cd ~/Downloads/rb2301_ca2_25 && source install/setup.bash && ros2 run rb2301_ca2 path_planning --run test1     # terminal 3
 ```
 
 After `vrpn` is up, `ros2 topic list` should show `/vrpn_mocap/bingda_0NN/pose`. Start terminal 3 last, with the robot on the start point of the run you chose (`--run test2` and `--run full` are the other two). It prints which robot it found (`robot=bingda_0NN`), then the map with the robot `S`, the goals `W` and `G` and later your route `*`.
