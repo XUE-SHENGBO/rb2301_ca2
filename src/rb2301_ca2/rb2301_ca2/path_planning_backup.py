@@ -637,52 +637,59 @@ class Grid():
             time.sleep(delay)
 
 
-def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list containing (int, int) representing each cell positions along the path in grid map
+def astar(start:Cell, end:Cell, grid_convert:list)->list:
+    """Search (position, incoming direction) states; return grid coordinates."""
+    import heapq
+    from itertools import count
 
-    start.g = 0.0
-    start.f = start.h
-    visited = set()
-    frontier=[start]
-    state_map
-    while(frontier):
-        this_cell = min(frontier, key=lambda cell: cell.f)
-        frontier.remove(this_cell)
-        visited.add(this_cell)
+    turn_penalty = 5.0
+    # None means the first move has no incoming heading and no turn penalty.
+    start_state = (start.position, None)
+    g_score = {start_state: 0.0}
+    came_from = {start_state: None}
+    sequence = count()  # Break heap ties without comparing directions with None.
+    frontier = [(start.h, next(sequence), 0.0, start_state)]
 
-        if this_cell.position == end.position:
+    while frontier:
+        _, _, current_g, state = heapq.heappop(frontier)
+        if current_g != g_score[state]:
+            continue  # A cheaper entry for this same state was queued later.
+
+        position, direction = state
+        if position == end.position:
             path = []
-            node = this_cell
-            while node is not None:
-                path.append(node.position)
-                node = node.parent
+            while state is not None:
+                path.append(state[0])
+                state = came_from[state]
             return path[::-1]
 
-        for i in range(-1,2):
-            for j in range(-1,2):
-                if not (i == 0 and j == 0) and 0<=this_cell.position[0]+i<len(grid_convert) and 0<=this_cell.position[1]+j<len(grid_convert[0]):
-                    this_child_cell = grid_convert[this_cell.position[0]+i][this_cell.position[1]+j]
-                    if this_child_cell.status == True:
-                        if i == 0 or j == 0:
-                            plan_g = this_cell.g + 1.0
-                        else:
-                            plan_g = this_cell.g + 1.414
-#===============================================================================
-                        change_orientation_punishment = 0     
-                        if this_cell.parent is not None:
-                            last_orientation = np.array(this_cell.parent.position) - np.array(this_cell.position)
-                            this_orientation = np.array(this_cell.position)-np.array(this_child_cell.position)
-                            if not np.array_equal(last_orientation, this_orientation):
-                                change_orientation_punishment = 5
-                        
-                        plan_g += change_orientation_punishment
-#===============================================================================
-                        if plan_g < this_child_cell.g:
-                            this_child_cell.g = plan_g
-                            this_child_cell.f = plan_g + this_child_cell.h
-                            this_child_cell.parent = this_cell
+        for i in range(-1, 2):
+            for j in range(-1, 2):
+                if i == 0 and j == 0:
+                    continue
+                row, col = position[0] + i, position[1] + j
+                if not (0 <= row < len(grid_convert)
+                        and 0 <= col < len(grid_convert[row])):
+                    continue
+                child = grid_convert[row][col]
+                if not child.status:
+                    continue
 
-                            if this_child_cell not in frontier:
-                                frontier.append(this_child_cell)
+                next_direction = (i, j)
+                next_state = (child.position, next_direction)
+                move_cost = 1.0 if i == 0 or j == 0 else 1.414
+                change_orientation_punishment = (
+                    turn_penalty
+                    if direction is not None and direction != next_direction
+                    else 0.0
+                )
+                plan_g = current_g + move_cost + change_orientation_punishment
+                if plan_g < g_score.get(next_state, float('inf')):
+                    g_score[next_state] = plan_g
+                    came_from[next_state] = (position, direction)
+                    heapq.heappush(frontier, (
+                        plan_g + child.h, next(sequence), plan_g, next_state
+                    ))
     return None
 
 
