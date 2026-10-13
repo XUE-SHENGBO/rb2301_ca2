@@ -781,7 +781,7 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
                             last_orientation = np.array(this_cell.parent.position) - np.array(this_cell.position)
                             this_orientation = np.array(this_cell.position)-np.array(this_child_cell.position)
                             if not np.array_equal(last_orientation, this_orientation):
-                                change_orientation_punishment = 5
+                                change_orientation_punishment = 0.1
                         
                         plan_g += change_orientation_punishment
 #===============================================================================
