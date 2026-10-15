@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-
-import argparse
 import ast
 import configparser
 import json
@@ -12,14 +10,11 @@ import time
 import sys
 import math
 
-
-
 import numpy as np
 import heapq
 import rclpy
 from rclpy.node import Node
 from rclpy.logging import set_logger_level, LoggingSeverity
-
 from rclpy.qos import (
     ReliabilityPolicy,
     QoSProfile,
@@ -29,6 +24,7 @@ from nav_msgs.msg import Odometry
 from PIL import Image
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64
+
 KP = 0.25
 KI = 0.5
 KD = 1.00
@@ -202,6 +198,7 @@ class WaypointNode(Node):
         self._last_printed_path = None
 
         self.grid_convert = self.convert_maparray(self.map_array)
+        print("test print")
         self.print_convert_map(self.grid_convert)   #test convert_maparray
 
         self.plan_init = False
