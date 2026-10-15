@@ -9,6 +9,8 @@ import os
 import time
 import sys
 import math
+import random
+import time
 
 import numpy as np
 import heapq
@@ -34,7 +36,7 @@ np.set_printoptions(#设定numpy数组打印格式，小数点后2位，禁止�
     2, suppress=True, threshold=sys.maxsize
 )  # Print numpy arrays to specified d.p., suppress scientific notation (e.g. 1e-5), and do not truncate
 
-set_logger_level("waypoint", level=LoggingSeverity.DEBUG) # Configure to either LoggingSeverity.INFO or LoggingSeverity.DEBUG
+set_logger_level("waypoint", level=LoggingSeverity.INFO) # Configure to either LoggingSeverity.INFO or LoggingSeverity.DEBUG
 
 occupancy_grid_resolution = 0.2 # Sim grid resolution, in metres per cell (the real maze uses the same 0.2m cells, see ca2_irl_layout.json)
 max_translate_velocity = 1.4 # Overwritten in main() based on sim vs real-life; 0.4m/s cap for real life, please keep that in place
@@ -204,16 +206,6 @@ class WaypointNode(Node):
         self.plan_init = False
         self.finished = False
 
-        # rqt_plot: speed in m/s, both headings in radians.
-        self.telemetry_publishers = {
-            name: self.create_publisher(Float64, name, 10)
-            for name in ('target_velocity', 'target_heading',
-                         'actual_velocity', 'actual_heading')
-        }
-
-
-
-
 
     def _print_calibration(self):
         '''--calibrate: twice a second, print the raw Optitrack pose next to the maze-frame pose and grid cell.'''
@@ -355,14 +347,17 @@ class WaypointNode(Node):
             print(''.join('.' if cell.status else '#' for cell in row))
         print('end convert map==============================')
 
-    def timer_callback(self):#=====================================================================================================
+    def timer_callback(self):#=====================================================================================================#
         """Controller loop. Insert path planning and PID control logic here"""
-        if self.finished:
+        now = time.time()
+
+        if self.finished:   #Check is finished?
             self.move_2D(0, 0, 0)
             return
+
         if self.pose is None:
             return # Does not run if no pose received from Odom or Optitrack
-        now = time.time()
+        
         if now - getattr(self, "_last_pose_log", 0.0) >= 1.0: # at most once a second, so it does not bury the map / warnings below
             self._last_pose_log = now
             self.get_logger().debug(f"Pose: {self.pose}")
@@ -389,9 +384,11 @@ class WaypointNode(Node):
             #self.print_map()
             self._last_printed_path = list(self.path)
 
-        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.25): #Called when current goal reached, excute reset
+        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.05): #Called when current goal reached precisely, excute reset
             self.goal_reached = True
             self.reset_planning()
+            self.get_logger().info("Reached goal! pos: " + str(self.pose[0]) + str(self.pose[1]) )
+            time.sleep(2)
             return
 
         #--------↑ planning ----------#
@@ -405,12 +402,13 @@ class WaypointNode(Node):
         while (
             self.current_waypoint_in_world_idx < len(self.waypoints_in_world) - 1
             and self.is_reached(self.current_waypoint_in_world, threshold=self.resolution * 0.25)
-        ):
+        ):  #Called when current waypoint reached, excute reset waypoint
             self.current_waypoint_in_world_idx += 1
             self.current_waypoint_in_world = (
                 self.waypoints_in_world[self.current_waypoint_in_world_idx]
             )
             self.reset_controller(self.current_waypoint_in_world)
+
         #计算移动和转向速度
         #distance = self.compute_distance(self.current_waypoint_in_world)
         if self.actual_velocity is None:
@@ -425,56 +423,54 @@ class WaypointNode(Node):
 
         distance = self.compute_distance(self.current_waypoint_in_world)        
 
-        idx = self.current_waypoint_in_world_idx + 1#add pre-turn
-        if idx < len(self.waypoints_in_world):
-            next_waypoint = self.waypoints_in_world[idx]
-            current = self.current_waypoint_in_world
+        def pre_turn(self)->float:  #Aim to do pre-turn when reaching a waypoint pointing towards next.
+                                    #Currently not taking actual effect
+            idx = self.current_waypoint_in_world_idx + 1#add pre-turn
+            if idx < len(self.waypoints_in_world):
+                next_waypoint = self.waypoints_in_world[idx]
+                current = self.current_waypoint_in_world
 
-            outgoing_heading = math.atan2(
-                next_waypoint[1] - current[1],
-                next_waypoint[0] - current[0],
-            )
+                outgoing_heading = math.atan2(
+                    next_waypoint[1] - current[1],
+                    next_waypoint[0] - current[0],
+                )
 
-            preview_distance = self.resolution
-            weight = min(1.0, 0.7 * max(0.0, 1.0 - distance / preview_distance))
+                preview_distance = self.resolution
+                weight = min(1.0, 0.7 * max(0.0, 1.0 - distance / preview_distance))
 
-            turn_delta = outgoing_heading - desired_heading
-            turn_delta = math.atan2(math.sin(turn_delta), math.cos(turn_delta))
-            desired_heading += weight * turn_delta
+                turn_delta = outgoing_heading - desired_heading
+                turn_delta = math.atan2(math.sin(turn_delta), math.cos(turn_delta))
+                desired_heading += weight * turn_delta
 
         # Recompute the error after preview changes the target heading.
-        heading_difference = desired_heading - math.radians(self.pose[2])
         heading_difference = math.atan2(math.sin(heading_difference), math.cos(heading_difference))
 
         target_speed = TARGET_SPEED*max(0,1-4*abs(heading_difference/2/PI)-min(np.exp(-distance),0.6))#角度差90度=完全不前进，离目标越近指数地变慢，最多减40%
-
         speed_difference = target_speed - self.actual_velocity[0]
-        #if 
+
+        if self.goal_reached == False and self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 1 ): #Called when current goal is nearby while not reached precisely, do finetune
+            self.replace_finetune_controller()
+            self.get_logger().info("Approaching goal! pos: " + str(self.pose[0]) + str(self.pose[1]))
+
         control_output_forward = target_speed + self.forward_controller.compute( speed_difference )
-
-        if abs(heading_difference) > PI/2:
-            control_output_forward = 0
-
         control_output_turning = self.turning_controller.compute( heading_difference )
 
-        #self.move_2D(control_output_forward, 0, control_output_turning)
-        self.move_2D(control_output_forward, 0, control_output_turning)
+        if abs(heading_difference) > PI/2:  #hard clip: stop moving forward if heading difference too large
+            control_output_forward = 0
+
+        noise = 0.4 * (1 if self.is_simulation else 0) #Simulation purpose
+        self.move_2D(control_output_forward + random.uniform(-control_output_forward*noise , control_output_forward*noise),
+                     0, 
+                     control_output_turning + random.uniform(-control_output_turning*noise , control_output_turning*noise)
+                    )
 
         self.last_velocity = self.actual_velocity
-        #self.get_logger().info(f'heading_diff:{heading_difference},control_turning:{control_output_turning}')
 
+        self.get_logger().debug(f'heading_diff:{heading_difference},control_turning:{control_output_turning}')
         self.get_logger().debug("" + str(self.pose[0]) + str(self.pose[1]))
 
-        telemetry = {
-            'target_velocity': target_speed,
-            'target_heading': desired_heading,
-            'actual_velocity': self.actual_velocity[0],
-            'actual_heading': math.radians(self.pose[2]),
-        }
-        for name, value in telemetry.items():
-            self.telemetry_publishers[name].publish(Float64(data=float(value)))
-#===================================================================================================================================
-
+#===================================================================================================================================#
+#↑↑↑↑↑↑↑↑↑↑timer_callback()↑↑↑↑↑↑↑↑↑↑↑↑#
         
 
 #----------Phase1: Planning------------#
@@ -555,18 +551,20 @@ class WaypointNode(Node):
 
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
-        self.pose_history = []#重置
-        self.forward_controller = self.PIController(Kp=0.8,Ki=0.5,Kd=0.0, output_limit=max_translate_velocity)
-        self.turning_controller = self.PIController(Kp=5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
+        self.pose_history = []#reset
+        self.forward_controller = self.PIDController(Kp=0.8,Ki=0.5,Kd=0.0, output_limit=max_translate_velocity)
+        self.turning_controller = self.PIDController(Kp=5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
 
-        
+    def replace_finetune_controller(self):
+        self.forward_controller = self.PIDController(Kp=0.4,Ki=0.7,Kd=0.0, output_limit=max_translate_velocity/2)
+        self.turning_controller = self.PIDController(Kp=2.5,Ki=0.7,Kd=0.05, output_limit=max_translate_velocity * 1)        
     def compute_distance(self, goal)->float:
         dx =  goal[0] - self.pose[0]
         dy =  goal[1] - self.pose[1]
 
         return math.sqrt( dx**2 + dy**2 )
 
-    def compute_heading_difference(self, goal)->float:
+    def compute_heading_difference(self, goal):
         dx =  goal[0] - self.pose[0]
         dy =  goal[1] - self.pose[1]
 
@@ -576,14 +574,13 @@ class WaypointNode(Node):
         error = desired_heading - current_heading
         return math.atan2(math.sin(error), math.cos(error))
 
-      
     def is_reached(self,goal,threshold:float)->bool:
         return self.compute_distance(goal) <= threshold
 
 
-    #def move_to_next_goal(self, goal):
 
-    class PIController:
+
+    class PIDController:
         def __init__(self, Kp, Ki, Kd, output_limit):
             self.Kp, self.Ki, self.Kd = Kp, Ki, Kd
             self.output_limit = output_limit
@@ -600,7 +597,6 @@ class WaypointNode(Node):
                 self.accumulated_error = candidate_integral
             output = self.Kp * error + self.Ki * self.accumulated_error + self.Kd * derivative
             return float(np.clip(output, -self.output_limit, self.output_limit))
-
 
 
 class Cell():
