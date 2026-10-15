@@ -448,7 +448,8 @@ class WaypointNode(Node):
         target_speed = TARGET_SPEED*max(0,1-4*abs(heading_difference/2/PI)-min(np.exp(-distance),0.6))#角度差90度=完全不前进，离目标越近指数地变慢，最多减40%
         speed_difference = target_speed - self.actual_velocity[0]
 
-        if self.goal_reached == False and self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 1 ): #Called when current goal is nearby while not reached precisely, do finetune
+        #Executed when current goal is nearby while not reached precisely, do final finetune
+        if self.goal_reached == False and self.is_reached(goal=self.waypoints_in_world[-1],threshold=self.resolution * 1 ): 
             self.replace_finetune_controller()
             self.get_logger().info("Approaching goal! pos: " + str(self.pose[0]) + str(self.pose[1]))
 
