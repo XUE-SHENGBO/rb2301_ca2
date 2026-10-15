@@ -389,7 +389,7 @@ class WaypointNode(Node):
             self.reset_controller(self.current_waypoint_in_world)
 
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
-            self.print_map()
+            #self.print_map()
             self._last_printed_path = list(self.path)
 
         if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.25): #Called when current goal reached, excute reset
@@ -425,12 +425,39 @@ class WaypointNode(Node):
         desired_heading = math.atan2(dy, dx)
 
         heading_difference = self.compute_heading_difference(self.current_waypoint_in_world)
-        distance = self.compute_distance(self.current_waypoint_in_world)
 
-        target_speed = TARGET_SPEED*max(0,1-2*abs(heading_difference/2/PI)-min(np.exp(-distance),0.6))#角度差90度=完全不前进，离目标越近指数地变慢，最多减20%
+        distance = self.compute_distance(self.current_waypoint_in_world)        
+
+        idx = self.current_waypoint_in_world_idx + 1#add pre-turn
+        if idx < len(self.waypoints_in_world):
+            next_waypoint = self.waypoints_in_world[idx]
+            current = self.current_waypoint_in_world
+
+            outgoing_heading = math.atan2(
+                next_waypoint[1] - current[1],
+                next_waypoint[0] - current[0],
+            )
+
+            preview_distance = self.resolution
+            weight = min(1.0, 0.7 * max(0.0, 1.0 - distance / preview_distance))
+
+            turn_delta = outgoing_heading - desired_heading
+            turn_delta = math.atan2(math.sin(turn_delta), math.cos(turn_delta))
+            desired_heading += weight * turn_delta
+
+        # Recompute the error after preview changes the target heading.
+        heading_difference = desired_heading - math.radians(self.pose[2])
+        heading_difference = math.atan2(math.sin(heading_difference), math.cos(heading_difference))
+
+        target_speed = TARGET_SPEED*max(0,1-4*abs(heading_difference/2/PI)-min(np.exp(-distance),0.6))#角度差90度=完全不前进，离目标越近指数地变慢，最多减40%
+
         speed_difference = target_speed - self.actual_velocity[0]
         #if 
         control_output_forward = target_speed + self.forward_controller.compute( speed_difference )
+
+        if abs(heading_difference) > PI/2:
+            control_output_forward = 0
+
         control_output_turning = self.turning_controller.compute( heading_difference )
 
         #self.move_2D(control_output_forward, 0, control_output_turning)
@@ -770,7 +797,13 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
             for j in range(-1,2):
                 if not (i == 0 and j == 0) and 0<=this_cell.position[0]+i<len(grid_convert) and 0<=this_cell.position[1]+j<len(grid_convert[0]):
                     this_child_cell = grid_convert[this_cell.position[0]+i][this_cell.position[1]+j]
-                    if ( this_child_cell.status == True ) and (not this_child_cell in visited):
+
+                    will_not_stuck = True
+                    if i != 0 and j != 0:
+                        if grid_convert[this_cell.position[0]+i][this_cell.position[1]+0].status ==False or grid_convert[this_cell.position[0]+0][this_cell.position[1]+j].status ==False:
+                            will_not_stuck = False
+
+                    if ( this_child_cell.status == True ) and (not this_child_cell in visited) and will_not_stuck:
                         if i == 0 or j == 0:
                             plan_g = this_cell.g + 1.0
                         else:
