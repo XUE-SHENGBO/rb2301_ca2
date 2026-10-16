@@ -572,12 +572,12 @@ class WaypointNode(Node):
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
         self.pose_history = []#reset
-        self.forward_controller = self.PIDController(Kp=0.25,Ki=0.5,Kd=1.0, output_limit=max_translate_velocity)
-        self.turning_controller = self.PIDController(Kp=2.5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
+        self.forward_controller = self.PIDController(Kp=0.25,Ki=0.5,Kd=0.5, output_limit=max_translate_velocity * 0.75)
+        self.turning_controller = self.PIDController(Kp=2.0,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
 
     def replace_finetune_controller(self):
         self.forward_controller = self.PIDController(Kp=0.4,Ki=0.7,Kd=0.0, output_limit=max_translate_velocity/2)
-        self.turning_controller = self.PIDController(Kp=2.5,Ki=0.7,Kd=0.05, output_limit=max_translate_velocity * 1)        
+        self.turning_controller = self.PIDController(Kp=2.0,Ki=0.7,Kd=0.05, output_limit=max_translate_velocity * 1)        
     def compute_distance(self, goal)->float:
         dx =  goal[0] - self.pose[0]
         dy =  goal[1] - self.pose[1]
