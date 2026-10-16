@@ -409,7 +409,7 @@ class WaypointNode(Node):
 
         while (
             self.current_waypoint_in_world_idx < len(self.waypoints_in_world) - 1
-            and self.is_reached(self.current_waypoint_in_world, threshold=self.resolution * 0.25)
+            and self.is_reached(self.current_waypoint_in_world, threshold=self.resolution * 0.15)
         ):  #Called when current waypoint reached, excute reset waypoint
             self.current_waypoint_in_world_idx += 1
             self.current_waypoint_in_world = (
@@ -459,7 +459,7 @@ class WaypointNode(Node):
         #Executed when current goal is nearby while not reached precisely, do final finetune
         if self.goal_reached == False and self.is_reached(goal=self.waypoints_in_world[-1],threshold=self.resolution * 1 ): 
             self.replace_finetune_controller()
-            self.get_logger().info("Approaching goal! pos: " + str(self.pose[0]) + str(self.pose[1]))
+            self.get_logger().info("Approaching goal! pos: " + str(self.pose[0]) + " " + str(self.pose[1]))
 
         control_output_forward = target_speed + self.forward_controller.compute( speed_difference )
         control_output_turning = self.turning_controller.compute( heading_difference )
@@ -572,12 +572,12 @@ class WaypointNode(Node):
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
         self.pose_history = []#reset
-        self.forward_controller = self.PIDController(Kp=0.25,Ki=0.5,Kd=0.3, output_limit=max_translate_velocity * 0.75)
-        self.turning_controller = self.PIDController(Kp=2.0,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
+        self.forward_controller = self.PIDController(Kp=0.20,Ki=0.2,Kd=0, output_limit=max_translate_velocity * 0.75)
+        self.turning_controller = self.PIDController(Kp=1.5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 1.5)
 
     def replace_finetune_controller(self):
-        self.forward_controller = self.PIDController(Kp=0.20,Ki=0.7,Kd=0.0, output_limit=max_translate_velocity/2)
-        self.turning_controller = self.PIDController(Kp=2.0,Ki=0.7,Kd=0.05, output_limit=max_translate_velocity * 1)        
+        self.forward_controller = self.PIDController(Kp=0.1,Ki=0.2,Kd=0.0, output_limit=max_translate_velocity/2.5)
+        self.turning_controller = self.PIDController(Kp=1.0,Ki=0.5,Kd=0.05, output_limit=max_translate_velocity * 1)        
     def compute_distance(self, goal)->float:
         dx =  goal[0] - self.pose[0]
         dy =  goal[1] - self.pose[1]
