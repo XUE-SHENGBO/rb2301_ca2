@@ -384,8 +384,9 @@ class WaypointNode(Node):
             #self.print_map()
             self._last_printed_path = list(self.path)
 
-        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.05): #Called when current goal reached precisely, excute reset
+        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.15): #Called when current goal reached precisely, excute reset
             self.goal_reached = True
+            self.move_2D(0, 0, 0)
             self.reset_planning()
             self.get_logger().info("Reached goal! pos: " + str(self.pose[0]) + str(self.pose[1]) )
             time.sleep(2)
@@ -553,7 +554,7 @@ class WaypointNode(Node):
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
         self.pose_history = []#reset
-        self.forward_controller = self.PIDController(Kp=0.8,Ki=0.5,Kd=0.0, output_limit=max_translate_velocity)
+        self.forward_controller = self.PIDController(Kp=0.8,Ki=0.1,Kd=0.0, output_limit=max_translate_velocity)
         self.turning_controller = self.PIDController(Kp=5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
 
     def replace_finetune_controller(self):
