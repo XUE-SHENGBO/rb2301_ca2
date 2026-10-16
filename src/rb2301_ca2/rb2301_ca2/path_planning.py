@@ -206,6 +206,13 @@ class WaypointNode(Node):
         self.plan_init = False
         self.finished = False
 
+        # rqt_plot: speed in m/s, both headings in radians.
+        self.telemetry_publishers = {
+            name: self.create_publisher(Float64, name, 10)
+            for name in ('target_velocity', 'target_heading',
+                         'actual_velocity', 'actual_heading')
+        }
+
 
     def _print_calibration(self):
         '''--calibrate: twice a second, print the raw Optitrack pose next to the maze-frame pose and grid cell.'''
@@ -460,7 +467,7 @@ class WaypointNode(Node):
         if abs(heading_difference) > PI/2:  #hard clip: stop moving forward if heading difference too large
             control_output_forward = 0
 
-        noise = 0.4 * (1 if self.is_simulation else 0) #Simulation purpose
+        noise = 0.0 * (1 if self.is_simulation else 0) #Simulation purpose
         self.move_2D(control_output_forward + random.uniform(-control_output_forward*noise , control_output_forward*noise),
                      0, 
                      control_output_turning + random.uniform(-control_output_turning*noise , control_output_turning*noise)
@@ -470,6 +477,17 @@ class WaypointNode(Node):
 
         self.get_logger().debug(f'heading_diff:{heading_difference},control_turning:{control_output_turning}')
         self.get_logger().debug("" + str(self.pose[0]) + str(self.pose[1]))
+
+
+        telemetry = {
+            'target_velocity': target_speed,
+            'target_heading': desired_heading,
+            'actual_velocity': self.actual_velocity[0],
+            'actual_heading': math.radians(self.pose[2]),
+        }
+        for name, value in telemetry.items():
+            self.telemetry_publishers[name].publish(Float64(data=float(value)))
+
 
 #===================================================================================================================================#
 #↑↑↑↑↑↑↑↑↑↑timer_callback()↑↑↑↑↑↑↑↑↑↑↑↑#
@@ -554,8 +572,8 @@ class WaypointNode(Node):
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
         self.pose_history = []#reset
-        self.forward_controller = self.PIDController(Kp=0.8,Ki=0.1,Kd=0.0, output_limit=max_translate_velocity)
-        self.turning_controller = self.PIDController(Kp=5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
+        self.forward_controller = self.PIDController(Kp=0.25,Ki=0.5,Kd=1.0, output_limit=max_translate_velocity)
+        self.turning_controller = self.PIDController(Kp=2.5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 2)
 
     def replace_finetune_controller(self):
         self.forward_controller = self.PIDController(Kp=0.4,Ki=0.7,Kd=0.0, output_limit=max_translate_velocity/2)
