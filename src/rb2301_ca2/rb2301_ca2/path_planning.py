@@ -177,6 +177,12 @@ class WaypointNode(Node):
                 )
 
         self.publisher_ = self.create_publisher(Twist, 'cmd_vel', 10) # Publish to cmd_vel node
+        # rqt_plot telemetry: linear speed in m/s, heading in radians.
+        self.telemetry_publishers = {
+            name: self.create_publisher(Float64, name, 10)
+            for name in ('target_velocity', 'target_heading',
+                         'actual_velocity', 'actual_heading')
+        }
         self.timer = self.create_timer(0.05, self.timer_callback)  # Runs at 20Hz. Can be changed.
 
         self.goal_list = goal_list
@@ -205,6 +211,8 @@ class WaypointNode(Node):
 
         self.plan_init = False
         self.finished = False
+
+        
 
 
     def _print_calibration(self):
@@ -471,6 +479,14 @@ class WaypointNode(Node):
         self.get_logger().debug(f'heading_diff:{heading_difference},control_turning:{control_output_turning}')
         self.get_logger().debug("" + str(self.pose[0]) + str(self.pose[1]))
 
+        telemetry = {
+            'target_velocity': target_speed,
+            'target_heading': desired_heading,
+            'actual_velocity': self.actual_velocity[0],
+            'actual_heading': math.radians(self.pose[2]),
+        }
+        for name, value in telemetry.items():
+            self.telemetry_publishers[name].publish(Float64(data=float(value)))
 #===================================================================================================================================#
 #↑↑↑↑↑↑↑↑↑↑timer_callback()↑↑↑↑↑↑↑↑↑↑↑↑#
         
