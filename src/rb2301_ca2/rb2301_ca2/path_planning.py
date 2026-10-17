@@ -50,7 +50,6 @@ max_translate_velocity = 1.4 # Overwritten in main() based on sim vs real-life; 
 
 CONTROL_PERIOD = 0.05
 _PACKAGE_DIR = os.path.dirname(os.path.realpath(__file__))#留下目录（获取这个脚本的绝对路径）
-TARGET_SPEED = 0.8
 
 # --- Coordinate conversion --------------------------------------------------
 # A grid index (i, j) represents a CELL, not a point. That cell's world
@@ -193,6 +192,8 @@ class WaypointNode(Node):
 
         self.pose = None
         self.actual_velocity = None  # [前进速度, 转动速度]
+        self.filtered_forward_velocity = None
+        self.velocity_filter_tau = 0.5  # 实机前进速度低通滤波时间常数(s)，越大越平滑但延迟越大
         self.last_pose = None
         self.last_timestamp = None
         self.last_velocity = None
@@ -288,6 +289,7 @@ class WaypointNode(Node):
                 return  # 重复时间戳不覆盖上一帧
             if dt < 0:
                 self.actual_velocity = None  # 仿真时间重置，重新采样
+                self.filtered_forward_velocity = None
             else:
                 dx, dy = self.pose[:2] - self.last_pose[:2]
                 yaw = math.radians(self.pose[2])
@@ -296,6 +298,13 @@ class WaypointNode(Node):
                                        math.cos(yaw - previous_yaw))
                 midpoint_yaw = previous_yaw + delta_yaw / 2
                 v = (dx * math.cos(midpoint_yaw) + dy * math.sin(midpoint_yaw)) / dt
+                if not self.is_simulation:#First-order low-pass filter
+                    if self.filtered_forward_velocity is None:
+                        self.filtered_forward_velocity = v
+                    else:
+                        alpha = dt / (self.velocity_filter_tau + dt)
+                        self.filtered_forward_velocity += alpha * (v - self.filtered_forward_velocity)
+                    v = self.filtered_forward_velocity
                 self.actual_velocity = (v, delta_yaw / dt)
         self.last_pose = self.pose.copy()
         self.last_timestamp = timestamp
@@ -453,7 +462,7 @@ class WaypointNode(Node):
         # Recompute the error after preview changes the target heading.
         heading_difference = math.atan2(math.sin(heading_difference), math.cos(heading_difference))
 
-        target_speed = TARGET_SPEED*max(0,1-4*abs(heading_difference/2/PI)-min(np.exp(-distance),0.6))#角度差90度=完全不前进，离目标越近指数地变慢，最多减40%
+        target_speed = max_translate_velocity*max(0,1-4*abs(heading_difference/2/PI)-min(np.exp(-distance),0.6))#角度差90度=完全不前进，离目标越近指数地变慢，最多减40%
         speed_difference = target_speed - self.actual_velocity[0]
 
         #Executed when current goal is nearby while not reached precisely, do final finetune
@@ -572,11 +581,11 @@ class WaypointNode(Node):
         distance = self.compute_distance(goal)
         heading_difference = self.compute_heading_difference(goal)
         self.pose_history = []#reset
-        self.forward_controller = self.PIDController(Kp=0.20,Ki=0.2,Kd=0, output_limit=max_translate_velocity * 0.75)
+        self.forward_controller = self.PIDController(Kp=0.30,Ki=0.2,Kd=0, output_limit=max_translate_velocity)
         self.turning_controller = self.PIDController(Kp=1.5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 1.5)
 
     def replace_finetune_controller(self):
-        self.forward_controller = self.PIDController(Kp=0.1,Ki=0.2,Kd=0.0, output_limit=max_translate_velocity/2.5)
+        self.forward_controller = self.PIDController(Kp=0.1,Ki=0.2,Kd=0.0, output_limit=max_translate_velocity)
         self.turning_controller = self.PIDController(Kp=1.0,Ki=0.5,Kd=0.05, output_limit=max_translate_velocity * 1)        
     def compute_distance(self, goal)->float:
         dx =  goal[0] - self.pose[0]
