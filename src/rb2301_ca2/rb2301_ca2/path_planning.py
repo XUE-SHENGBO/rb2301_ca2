@@ -397,7 +397,7 @@ class WaypointNode(Node):
             self.print_map()
             self._last_printed_path = list(self.path)
 
-        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.3): #Called when current goal reached precisely, excute reset
+        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.2): #Called when current goal reached precisely, excute reset
             self.goal_reached = True
             self.move_2D(0, 0, 0)
             self.reset_planning()
@@ -415,7 +415,7 @@ class WaypointNode(Node):
 
         while (
             self.current_waypoint_in_world_idx < len(self.waypoints_in_world) - 1
-            and self.is_reached(self.current_waypoint_in_world, threshold=self.resolution * 0.25)
+            and self.is_reached(self.current_waypoint_in_world, threshold=self.resolution * 0.3)
         ):  #Called when current waypoint reached, excute reset waypoint
             self.current_waypoint_in_world_idx += 1
             self.current_waypoint_in_world = (
