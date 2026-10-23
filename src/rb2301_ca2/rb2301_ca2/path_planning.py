@@ -415,7 +415,7 @@ class WaypointNode(Node):
 
         while (
             self.current_waypoint_in_world_idx < len(self.waypoints_in_world) - 1
-            and self.is_reached(self.current_waypoint_in_world, threshold=self.resolution * 0.15)
+            and self.is_reached(self.current_waypoint_in_world, threshold=self.resolution * 0.3)
         ):  #Called when current waypoint reached, excute reset waypoint
             self.current_waypoint_in_world_idx += 1
             self.current_waypoint_in_world = (
@@ -459,7 +459,7 @@ class WaypointNode(Node):
         # Recompute the error after preview changes the target heading.
         heading_difference = math.atan2(math.sin(heading_difference), math.cos(heading_difference))
 
-        target_speed = max_translate_velocity*max(0,1-4*abs(heading_difference/2/PI)-min(np.exp(-distance*5),0.4))#角差90度=完全不前进，离目标越近指数地变慢，最多减40%
+        target_speed = max_translate_velocity*max(0,1-4*abs(heading_difference/2/PI)-min(np.exp(-distance*10),0.4))#角差90度=完全不前进，离目标越近指数地变慢，最多减40%
         speed_difference = target_speed - self.actual_velocity[0]
 
         #Executed when current goal is nearby while not reached precisely, do final finetune
