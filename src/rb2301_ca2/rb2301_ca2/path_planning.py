@@ -459,14 +459,15 @@ class WaypointNode(Node):
         # Recompute the error after preview changes the target heading.
         heading_difference = math.atan2(math.sin(heading_difference), math.cos(heading_difference))
 
-        target_speed = min(
-            max_translate_velocity * max(
+        target_speed = max_translate_velocity * max(
                 0,
                 1 - 6 * abs(heading_difference / (2 * PI))
                 - min(np.exp(-distance * 7), 0.4)
-            ),
-            0.8 * distance
-        )
+            )
+        
+        if self.current_waypoint_in_world_idx == len(self.waypoints_in_world) - 1:  #limit speed when approaching goal
+            target_speed = min(target_speed, 0.8 * distance)
+
         speed_difference = target_speed - self.actual_velocity[0]
 
         #Executed when current goal is nearby while not reached precisely, do final finetune
