@@ -394,10 +394,10 @@ class WaypointNode(Node):
             self.reset_controller(self.current_waypoint_in_world)
 
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
-            self.print_map()
+            #self.print_map()
             self._last_printed_path = list(self.path)
 
-        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.2): #Called when current goal reached precisely, excute reset
+        if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.25): #Called when current goal reached precisely, excute reset
             self.goal_reached = True
             self.move_2D(0, 0, 0)
             self.reset_planning()
@@ -459,7 +459,14 @@ class WaypointNode(Node):
         # Recompute the error after preview changes the target heading.
         heading_difference = math.atan2(math.sin(heading_difference), math.cos(heading_difference))
 
-        target_speed = max_translate_velocity*max(0,1-6*abs(heading_difference/2/PI)-min(np.exp(-distance*7),0.4))#角差90度=完全不前进，离目标越近指数地变慢，最多减40%
+        target_speed = min(
+            max_translate_velocity * max(
+                0,
+                1 - 6 * abs(heading_difference / (2 * PI))
+                - min(np.exp(-distance * 7), 0.4)
+            ),
+            0.8 * distance
+        )
         speed_difference = target_speed - self.actual_velocity[0]
 
         #Executed when current goal is nearby while not reached precisely, do final finetune
