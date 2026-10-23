@@ -394,7 +394,7 @@ class WaypointNode(Node):
             self.reset_controller(self.current_waypoint_in_world)
 
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
-            #self.print_map()
+            self.print_map()
             self._last_printed_path = list(self.path)
 
         if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.3): #Called when current goal reached precisely, excute reset
