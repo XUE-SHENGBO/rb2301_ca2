@@ -27,9 +27,6 @@ from PIL import Image
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64
 
-KP = 0.25
-KI = 0.5
-KD = 1.00
 PI = 3.1415926
 
 np.set_printoptions(#设定numpy数组打印格式，小数点后2位，禁止科学计数法，数组省略上限：非常大
@@ -193,7 +190,7 @@ class WaypointNode(Node):
         self.pose = None
         self.actual_velocity = None  # [前进速度, 转动速度]
         self.filtered_forward_velocity = None
-        self.velocity_filter_tau = 0.5  # 实机前进速度低通滤波时间常数(s)，越大越平滑但延迟越大
+        self.velocity_filter_tau = 0.1  # 实机前进速度低通滤波时间常数(s)，越大越平滑但延迟越大
         self.last_pose = None
         self.last_timestamp = None
         self.last_velocity = None
