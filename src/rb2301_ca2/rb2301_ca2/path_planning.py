@@ -29,7 +29,7 @@ from std_msgs.msg import Float64
 
 PI = 3.1415926
 
-np.set_printoptions(#设定numpy数组打印格式，小数点后2位，禁止科学计数法，数组省略上限：非常大
+np.set_printoptions(#set the form of numpy array
     2, suppress=True, threshold=sys.maxsize
 )  # Print numpy arrays to specified d.p., suppress scientific notation (e.g. 1e-5), and do not truncate
 
@@ -46,7 +46,7 @@ irl_resolution = occupancy_grid_resolution / 2 # The real maze is built at half 
 max_translate_velocity = 1.4 # Overwritten in main() based on sim vs real-life; 0.3m/s cap for real life, please keep that in place
 
 CONTROL_PERIOD = 0.05
-_PACKAGE_DIR = os.path.dirname(os.path.realpath(__file__))#留下目录（获取这个脚本的绝对路径）
+_PACKAGE_DIR = os.path.dirname(os.path.realpath(__file__))#get the absolute path of this script
 
 # --- Coordinate conversion --------------------------------------------------
 # A grid index (i, j) represents a CELL, not a point. That cell's world
@@ -188,9 +188,9 @@ class WaypointNode(Node):
         self._calibrate_ticks = 0
 
         self.pose = None
-        self.actual_velocity = None  # [前进速度, 转动速度]
+        self.actual_velocity = None  # [forward speed, turning speed]
         self.filtered_forward_velocity = None
-        self.velocity_filter_tau = 0.1  # 实机前进速度低通滤波时间常数(s)，越大越平滑但延迟越大
+        self.velocity_filter_tau = 0.1  # first-class low-pass filter costant
         self.last_pose = None
         self.last_timestamp = None
         self.last_velocity = None
@@ -204,7 +204,7 @@ class WaypointNode(Node):
         self.plan_init = False
         self.finished = False
 
-        # rqt_plot: speed in m/s, both headings in radians.
+        # rqt_plot: speed in m/s, both headings in radians
         self.telemetry_publishers = {
             name: self.create_publisher(Float64, name, 10)
             for name in ('target_velocity', 'target_heading',
@@ -245,8 +245,8 @@ class WaypointNode(Node):
         current_cell = clip(world_to_grid(self.pose[0], self.pose[1], self.origin, self.resolution))
         goal_cells = [clip(world_to_grid(gx, gy, self.origin, self.resolution)) for gx, gy in self.goal_list]
         grid = Grid(self.map_array, starting_position=current_cell, goal_position=goal_cells[-1])
-        grid.print_grid_map(waypoints=self.waypoints, path=self.path)#打印字符地图
-        grid.draw_grid_map(waypoints=self.waypoints, path=self.path)#打印图形地图
+        grid.print_grid_map(waypoints=self.waypoints, path=self.path)#print ASCII map
+        grid.draw_grid_map(waypoints=self.waypoints, path=self.path)#print graph map
 
     def yaw_from_quaternion(self, q):
         '''Returns yaw angle (in rad) for orientation based on given quaternion input q'''
@@ -278,14 +278,14 @@ class WaypointNode(Node):
         return self.pose
 
     def update_velocity(self, stamp):
-        """用相邻传感器帧估算车身前进速度(m/s)和角速度(rad/s)。"""
+        """use differentiation of position to estimate the forward speed(m/s) and angular speed(rad/s)"""
         timestamp = stamp.sec + stamp.nanosec * 1e-9
         if self.last_timestamp is not None:
             dt = timestamp - self.last_timestamp
             if dt == 0:
-                return  # 重复时间戳不覆盖上一帧
+                return  
             if dt < 0:
-                self.actual_velocity = None  # 仿真时间重置，重新采样
+                self.actual_velocity = None
                 self.filtered_forward_velocity = None
             else:
                 dx, dy = self.pose[:2] - self.last_pose[:2]
@@ -333,7 +333,8 @@ class WaypointNode(Node):
 
         return res
 
-    def reset_map(self,map_array, goal_position):    #go through every cell in the map ,intialize and compute heuristic. Call when reach goal point
+    def reset_map(self,map_array, goal_position):    
+        '''go through every cell in the map ,intialize and compute heuristic. Call when reach goal point'''
         for i in range(len(map_array)):
             for j in range(len(map_array[i])):
                 node = map_array[i][j]
@@ -394,7 +395,7 @@ class WaypointNode(Node):
             self.reset_controller(self.current_waypoint_in_world)
 
         if self.path != self._last_printed_path: # Prints once immediately (map + start + goals), then again each time self.path changes
-            #self.print_map()
+            self.print_map()
             self._last_printed_path = list(self.path)
 
         if self.is_reached(goal=self.waypoints_in_world[-1], threshold=self.resolution * 0.25): #Called when current goal reached precisely, excute reset
@@ -423,7 +424,7 @@ class WaypointNode(Node):
             )
             self.reset_controller(self.current_waypoint_in_world)
 
-        #计算移动和转向速度
+        #calculate the speed of shift and turning
         #distance = self.compute_distance(self.current_waypoint_in_world)
         if self.actual_velocity is None:
             return
@@ -435,7 +436,7 @@ class WaypointNode(Node):
 
         heading_difference = self.compute_heading_difference(self.current_waypoint_in_world)
 
-        distance = self.compute_distance(self.current_waypoint_in_world)        
+        distance = self.compute_distance(self.current_waypoint_in_world)
 
         def pre_turn(self)->float:  #Aim to do pre-turn when reaching a waypoint pointing towards next.
                                     #Currently not taking actual effect
@@ -463,7 +464,7 @@ class WaypointNode(Node):
                 0,
                 1 - 6 * abs(heading_difference / (2 * PI))
                 - min(np.exp(-distance * 7), 0.4)
-            )
+            )# calculate the target speed considering heading difference and distance to the next waypoint
         
         if self.current_waypoint_in_world_idx == len(self.waypoints_in_world) - 1:  #limit speed when approaching goal
             target_speed = min(target_speed, 0.8 * distance)
@@ -475,11 +476,11 @@ class WaypointNode(Node):
             self.replace_finetune_controller()
             self.get_logger().info("Approaching goal! pos: " + str(self.pose[0]) + " " + str(self.pose[1]))
 
-        control_output_forward = target_speed + self.forward_controller.compute( speed_difference )
+        control_output_forward = target_speed + self.forward_controller.compute( speed_difference )# actually calculate the control output executing PID
         control_output_turning = self.turning_controller.compute( heading_difference )
 
         # if abs(heading_difference) > PI/2:  #hard clip: stop moving forward if heading difference too large
-            # control_output_forward = 0
+            # control_output_forward = 0      # not in used because the former target_speed function has done
 
         noise = 0.0 * (1 if self.is_simulation else 0) #Simulation purpose
         self.move_2D(control_output_forward + random.uniform(-control_output_forward*noise , control_output_forward*noise),
@@ -493,7 +494,7 @@ class WaypointNode(Node):
         self.get_logger().debug("" + str(self.pose[0]) + str(self.pose[1]))
 
 
-        telemetry = {
+        telemetry = {# publish velocity and heading for monitoring
             'target_velocity': target_speed,
             'target_heading': desired_heading,
             'actual_velocity': self.actual_velocity[0],
@@ -509,6 +510,7 @@ class WaypointNode(Node):
 
 #----------Phase1: Planning------------#
     def gen_path(self)->list:
+        '''call astar and use cell class to generate a path'''
         if not self.goal_list:
             self.get_logger().info("reach the desitination!")
             return True
@@ -531,7 +533,8 @@ class WaypointNode(Node):
             self.get_logger().error('Pathfinding failed!')
             return False
 
-    def gen_waypoints(self)->list:  #Set waypoints for controller to excute. Goal cell included, starting cell excluded.
+    def gen_waypoints(self)->list:
+        '''Set waypoints for controller to excute. Goal cell included, starting cell excluded'''
         if(not self.path):
             self.get_logger().error('Waypoints generation failed: no path provided!')
             return False
@@ -552,7 +555,8 @@ class WaypointNode(Node):
         waypoints.append(self.path[-1])
         return waypoints
 
-    def reset_planning(self):   #Called when controller confirm reach previous goal (goal_reached == True)
+    def reset_planning(self):
+        '''Called when controller confirm reach previous goal (goal_reached == True)'''
         if len(self.goal_list) == 1:
             self.finished = True
             self.move_2D(0, 0, 0)
@@ -580,6 +584,7 @@ class WaypointNode(Node):
 
 #----------Phase2: Controlling---------#
     def reset_controller(self, goal: tuple[float, float]):
+        '''for each waypoint,create a new PID controller and reset the goal'''
         dx =  goal[0] - self.pose[0]
         dy =  goal[1] - self.pose[1]
 
@@ -590,6 +595,7 @@ class WaypointNode(Node):
         self.turning_controller = self.PIDController(Kp=1.5,Ki=0.5,Kd=0.1, output_limit=max_translate_velocity * 1.5)
 
     def replace_finetune_controller(self):
+        '''create PID for finetune'''
         self.forward_controller = self.PIDController(Kp=0.1,Ki=0.2,Kd=0.0, output_limit=max_translate_velocity)
         self.turning_controller = self.PIDController(Kp=1.0,Ki=0.5,Kd=0.05, output_limit=max_translate_velocity * 1)        
     def compute_distance(self, goal)->float:
@@ -615,6 +621,7 @@ class WaypointNode(Node):
 
 
     class PIDController:
+        '''define a PID controller'''
         def __init__(self, Kp, Ki, Kd, output_limit):
             self.Kp, self.Ki, self.Kd = Kp, Ki, Kd
             self.output_limit = output_limit
@@ -622,18 +629,19 @@ class WaypointNode(Node):
             self.last_error = None
 
         def compute(self, error):
+            '''acturally calculate the control_output'''
             derivative = 0.0 if self.last_error is None else (error - self.last_error) / CONTROL_PERIOD
             self.last_error = error
             candidate_integral = self.accumulated_error + error * CONTROL_PERIOD
             output = self.Kp * error + self.Ki * candidate_integral + self.Kd * derivative
-            # 达到限幅时，仅允许帮助退出饱和的积分更新
-            if abs(output) <= self.output_limit or output * error < 0:
+            if abs(output) <= self.output_limit or output * error < 0:#output validation
                 self.accumulated_error = candidate_integral
             output = self.Kp * error + self.Ki * self.accumulated_error + self.Kd * derivative
             return float(np.clip(output, -self.output_limit, self.output_limit))
 
 
 class Cell():
+    '''def a cell class for astar'''
     def __init__(self,h:float,position:tuple,status:bool):
         self.f = np.inf
         self.g = np.inf
@@ -801,7 +809,12 @@ class Grid():
             time.sleep(delay)
 
 
-def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list containing (int, int) representing each cell positions along the path in grid map
+def astar(start:Cell, end:Cell, grid_convert:list)->list:
+
+    '''
+    given start cell and end cell, calculate a path using astar,
+    return a list containing (int, int) representing each cell positions along the path in grid map
+    '''
 
     start.g = 0.0
     start.f = start.h
@@ -826,7 +839,7 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
                     this_child_cell = grid_convert[this_cell.position[0]+i][this_cell.position[1]+j]
 
                     will_not_stuck = True
-                    if i != 0 and j != 0:
+                    if i != 0 and j != 0:#detect diagonal corner-cutting
                         if grid_convert[this_cell.position[0]+i][this_cell.position[1]+0].status ==False or grid_convert[this_cell.position[0]+0][this_cell.position[1]+j].status ==False:
                             will_not_stuck = False
 
@@ -836,7 +849,7 @@ def astar(start:Cell, end:Cell, grid_convert:list)->list:   #return a list conta
                         else:
                             plan_g = this_cell.g + 1.414
 #===============================================================================
-                        change_orientation_punishment = 0     
+                        change_orientation_punishment = 0     # punish turning
                         if this_cell.parent is not None:
                             last_orientation = np.array(this_cell.parent.position) - np.array(this_cell.position)
                             this_orientation = np.array(this_cell.position)-np.array(this_child_cell.position)
